@@ -107,6 +107,7 @@ namespace BancoBr.CNAB.Core
             cnab.Arquivo = string.Join("\r\n", linhas);
 
             Lote lote = null;
+            var ignoraLote = false;
 
             foreach (var linha in linhas)
             {
@@ -124,8 +125,11 @@ namespace BancoBr.CNAB.Core
                 }
                 else if (tipoRegistro == "1") //Header de Lote
                 {
-                    if (!new []{20, 22, 30}.Contains(Convert.ToInt32(linha.Substring(9, 2)))) // 20 = Somente Pagamento de Fornecedores, 22 = Tributos, 30 = Salários, DDA (Código 3) será desenvolvido posteriormente
+                    if (!new[] { 20, 22, 30 }.Contains(Convert.ToInt32(linha.Substring(9, 2)))) // 20 = Somente Pagamento de Fornecedores, 22 = Tributos, 30 = Salários, DDA (Código 3) será desenvolvido posteriormente
+                    {
+                        ignoraLote = true;
                         continue;
+                    }
 
                     var tipoLancamento = Convert.ToInt32(linha.Substring(11, 2));
 
@@ -144,7 +148,7 @@ namespace BancoBr.CNAB.Core
                 }
                 else if (tipoRegistro == "3") //Detalhe Detalhe
                 {
-                    if (lote?.Header == null) //Se não criou o lote ou o header, é porque os registros do segmento ainda não foram desenvolvidos.
+                    if (ignoraLote) //Se não criou o lote ou o header, é porque os registros do segmento ainda não foram desenvolvidos.
                         continue;
 
                     var tipoLancamento = ((HeaderLote)lote.Header).TipoLancamento;
@@ -176,13 +180,16 @@ namespace BancoBr.CNAB.Core
                 }
                 else if (tipoRegistro == "4") //Detalhe Finais de Lote
                 {
-                    if (lote?.Header == null) //Se não criou o lote ou o header, é porque os registros do segmento ainda não foram desenvolvidos.
+                    if (ignoraLote) //Se não criou o lote ou o header, é porque os registros do segmento ainda não foram desenvolvidos.
                         continue;
                 }
                 else if (tipoRegistro == "5") //Trailer de Lote
                 {
-                    if (lote?.Header == null) //Se não criou o lote ou o header, é porque os registros do segmento ainda não foram desenvolvidos.
+                    if (ignoraLote) //Se não criou o lote ou o header, é porque os registros do segmento ainda não foram desenvolvidos.
+                    {
+                        ignoraLote = false; //Reseta a variável de lote, para importar novo lote se houver.
                         continue;
+                    }
 
                     lote.Trailer = cnab.Banco.NovoTrailerLote(lote);
                     instanciaRegistro = lote.Trailer;
