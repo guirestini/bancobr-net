@@ -1,4 +1,5 @@
 using System.Net;
+using BancoBr.API.Pagamentos.Models;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
@@ -100,7 +101,7 @@ namespace BancoBr.Tests.Sicoob
                 DebtorAccount = new DebtorAccount { Issuer = 1234, Number = 1234569, AccountType = 0, PersonType = 0 },
             };
 
-            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569));
+            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New("lancamento-1"));
 
             Assert.False(resultado.PendenteAssinatura);
             Assert.NotNull(resultado.Comprovante);
@@ -117,7 +118,7 @@ namespace BancoBr.Tests.Sicoob
             var client = CriarClient(handler);
             var request = new BoletoPagamentoRequest { DebtorAccount = new DebtorAccount() };
 
-            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569));
+            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New("lancamento-1"));
 
             Assert.True(resultado.PendenteAssinatura);
             Assert.Null(resultado.Comprovante);
@@ -135,7 +136,7 @@ namespace BancoBr.Tests.Sicoob
             var request = new BoletoPagamentoRequest { DebtorAccount = new DebtorAccount() };
 
             var ex = await Assert.ThrowsAsync<SicoobApiException>(() =>
-                client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569)));
+                client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New("lancamento-1")));
 
             Assert.Equal(400, ex.HttpStatusCode);
             Assert.Equal("10013", ex.Mensagens.Single().Codigo);
@@ -180,14 +181,28 @@ namespace BancoBr.Tests.Sicoob
         }
 
         [Fact]
-        public void IdempotencyKey_New_SeguePadraoCooperativaContaUuid()
+        public void IdempotencyKey_New_CombinaIdLancamentoComAcao()
         {
-            var key = IdempotencyKey.New(4342, 8901234);
+            Assert.Equal("lancamento-42-INCLUSAO", IdempotencyKey.New("lancamento-42"));
+            Assert.Equal("lancamento-42-CANCELAMENTO", IdempotencyKey.New("lancamento-42", "CANCELAMENTO"));
+        }
 
-            var partes = key.Split('-');
-            Assert.Equal("4342", partes[0]);
-            Assert.Equal("8901234", partes[1]);
-            Assert.True(Guid.TryParse(string.Join("-", partes.Skip(2)), out _));
+        [Fact]
+        public void IdempotencyKey_New_MesmoLancamentoMesmaAcaoGeraMesmaKey()
+        {
+            var key1 = IdempotencyKey.New("lancamento-42");
+            var key2 = IdempotencyKey.New("lancamento-42");
+
+            Assert.Equal(key1, key2);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void IdempotencyKey_New_SemIdLancamento_LancaArgumentException(string? idLancamento)
+        {
+            Assert.Throws<ArgumentException>(() => IdempotencyKey.New(idLancamento!));
         }
 
         private const string ConsultaJsonNaoBloqueado = @"
@@ -238,6 +253,7 @@ namespace BancoBr.Tests.Sicoob
                 "00000000000000000000000000000000000000000000",
                 numeroConta: 1234569,
                 numeroCooperativa: 4342,
+                idLancamento: "lancamento-1",
                 numeroCpfCnpjPortador: "12345678900",
                 nomePortador: "Rosa Maria da Silva");
 
@@ -260,6 +276,7 @@ namespace BancoBr.Tests.Sicoob
                 "00000000000000000000000000000000000000000000",
                 numeroConta: 1234569,
                 numeroCooperativa: 4342,
+                idLancamento: "lancamento-1",
                 numeroCpfCnpjPortador: "12345678900",
                 nomePortador: "Rosa Maria da Silva");
 
@@ -278,6 +295,7 @@ namespace BancoBr.Tests.Sicoob
                 "00000000000000000000000000000000000000000000",
                 numeroConta: 1234569,
                 numeroCooperativa: 4342,
+                idLancamento: "lancamento-1",
                 numeroCpfCnpjPortador: "12345678900",
                 nomePortador: "Rosa Maria da Silva");
 
@@ -285,6 +303,20 @@ namespace BancoBr.Tests.Sicoob
             Assert.True(resultado.PagamentoBloqueado);
             Assert.Equal("Pagamento bloqueado", resultado.MensagemBloqueio);
             Assert.Null(resultado.Comprovante);
+        }
+
+        [Fact]
+        public async Task ConsultarBoletoAsync_401_RenovaTokenERepeteChamadaUmaVez()
+        {
+            var handler = new SequencedFakeHttpMessageHandler(
+                (HttpStatusCode.Unauthorized, null),
+                (HttpStatusCode.OK, ConsultaJsonNaoBloqueado));
+            var client = CriarClient(handler);
+
+            var resultado = await client.ConsultarBoletoAsync("00000000000000000000000000000000000000000000", 1234569);
+
+            Assert.Equal(2, handler.Requests.Count);
+            Assert.Equal("hash-123", resultado!.IdentificadorConsulta);
         }
 
         [Fact]
@@ -304,9 +336,9 @@ namespace BancoBr.Tests.Sicoob
             var client = CriarClient(handler);
             var itens = new[]
             {
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-1", NumeroConta = 1234569, NumeroCooperativa = 4342, NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 1" },
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-2", NumeroConta = 1234569, NumeroCooperativa = 4342, NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 2" },
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-3", NumeroConta = 1234569, NumeroCooperativa = 4342, NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 3" },
+                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-1", NumeroConta = 1234569, NumeroCooperativa = 4342, IdLancamento = "lancamento-1", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 1" },
+                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-2", NumeroConta = 1234569, NumeroCooperativa = 4342, IdLancamento = "lancamento-2", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 2" },
+                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-3", NumeroConta = 1234569, NumeroCooperativa = 4342, IdLancamento = "lancamento-3", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 3" },
             };
 
             var resultados = await client.PagarLoteBoletosAsync(itens);

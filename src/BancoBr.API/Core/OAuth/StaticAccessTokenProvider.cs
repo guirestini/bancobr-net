@@ -27,5 +27,9 @@ namespace BancoBr.API.Core.OAuth
         {
             return Task.FromResult(_accessToken);
         }
+
+        public void InvalidateToken()
+        {
+        }
     }
 }

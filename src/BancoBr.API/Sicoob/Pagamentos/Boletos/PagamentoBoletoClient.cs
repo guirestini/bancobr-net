@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using BancoBr.API.Base;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
+using BancoBr.API.Pagamentos.Models;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
 using BancoBr.Common.Enums;
@@ -114,7 +115,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 .ConfigureAwait(false);
         }
 
-        public override async Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroCooperativa, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default)
+        public override async Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroCooperativa, string idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default)
         {
             var consulta = await ConsultarBoletoAsync(codigoBarras, numeroConta, dataPagamento, cancellationToken).ConfigureAwait(false);
             if (consulta == null)
@@ -148,7 +149,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 },
             };
 
-            var idempotencyKey = IdempotencyKey.New(numeroCooperativa, numeroConta);
+            var idempotencyKey = IdempotencyKey.New(idLancamento);
             return await PagarBoletoAsync(codigoBarras, request, idempotencyKey, cancellationToken).ConfigureAwait(false);
         }
 
@@ -164,6 +165,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                         item.CodigoBarras,
                         item.NumeroConta,
                         item.NumeroCooperativa,
+                        item.IdLancamento,
                         item.NumeroCpfCnpjPortador,
                         item.NomePortador,
                         item.AceitaValorDivergente,
@@ -192,8 +194,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             var url = $"{_baseUrl}boletos/pagamentos/{codigoBarras}";
             var json = JsonSerializer.Serialize(request, SerializerOptions);
 
-            using (var httpRequest = BuildRequest(HttpMethod.Post, url, json, idempotencyKey))
-            using (var response = await SendWithAuthAsync(httpRequest, cancellationToken).ConfigureAwait(false))
+            using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Post, url, json, idempotencyKey), cancellationToken).ConfigureAwait(false))
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.Accepted)
                 {
@@ -225,8 +226,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             var url = $"{_baseUrl}boletos/pagamentos/agendamentos/{idPagamento}";
             var json = JsonSerializer.Serialize(new CancelamentoRequest { NumeroConta = numeroConta }, SerializerOptions);
 
-            using (var httpRequest = BuildRequest(HttpMethod.Delete, url, json, idempotencyKey: null))
-            using (var response = await SendWithAuthAsync(httpRequest, cancellationToken).ConfigureAwait(false))
+            using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Delete, url, json, idempotencyKey: null), cancellationToken).ConfigureAwait(false))
             {
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
             }
@@ -243,8 +243,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
         {
             var url = $"{_baseUrl}boletos?numeroConta={numeroConta}&dataInicial={dataInicial:yyyy-MM-dd}&dataFinal={dataFinal:yyyy-MM-dd}&situacao={(int)situacao}&tipoData={(int)tipoData}";
 
-            using (var httpRequest = BuildRequest(HttpMethod.Get, url, body: null, idempotencyKey: null))
-            using (var response = await SendWithAuthAsync(httpRequest, cancellationToken).ConfigureAwait(false))
+            using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Get, url, body: null, idempotencyKey: null), cancellationToken).ConfigureAwait(false))
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                 {
@@ -260,8 +259,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
 
         private async Task<T> SendAsync<T>(HttpMethod method, string url, string body, string idempotencyKey, CancellationToken cancellationToken)
         {
-            using (var httpRequest = BuildRequest(method, url, body, idempotencyKey))
-            using (var response = await SendWithAuthAsync(httpRequest, cancellationToken).ConfigureAwait(false))
+            using (var response = await SendWithAuthAsync(() => BuildRequest(method, url, body, idempotencyKey), cancellationToken).ConfigureAwait(false))
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                 {
@@ -294,11 +292,29 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return request;
         }
 
-        private async Task<HttpResponseMessage> SendWithAuthAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        private async Task<HttpResponseMessage> SendWithAuthAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
         {
             var token = await _tokenProvider.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            return await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var response = await SendOnceAsync(requestFactory, token, cancellationToken).ConfigureAwait(false);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                response.Dispose();
+                _tokenProvider.InvalidateToken();
+                token = await _tokenProvider.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+                response = await SendOnceAsync(requestFactory, token, cancellationToken).ConfigureAwait(false);
+            }
+
+            return response;
+        }
+
+        private async Task<HttpResponseMessage> SendOnceAsync(Func<HttpRequestMessage> requestFactory, string token, CancellationToken cancellationToken)
+        {
+            using (var request = requestFactory())
+            {
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                return await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         private static async Task EnsureSuccessOrThrowAsync(HttpResponseMessage response)

@@ -1,6 +1,7 @@
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Pagamentos;
+using BancoBr.API.Pagamentos.Models;
 using BancoBr.API.Sicoob;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
@@ -18,6 +19,7 @@ string? certPassword = Environment.GetEnvironmentVariable("SICOOB_CERT_PASSWORD"
 string? numeroCooperativaText = Environment.GetEnvironmentVariable("SICOOB_NUMERO_COOPERATIVA");
 string? numeroContaText = Environment.GetEnvironmentVariable("SICOOB_NUMERO_CONTA");
 string? codigoBarras = Environment.GetEnvironmentVariable("SICOOB_CODIGO_BARRAS");
+string idLancamento = Environment.GetEnvironmentVariable("SICOOB_ID_LANCAMENTO") ?? $"SANDBOX-{DateTime.UtcNow:yyyyMMddHHmmss}";
 bool confirmarPagamento = Environment.GetEnvironmentVariable("SICOOB_CONFIRMAR_PAGAMENTO") == "true";
 
 // O Sicoob expõe, no portal de sandbox, um "Access token (Bearer)" já emitido para teste
@@ -46,6 +48,7 @@ if (faltando.Count > 0)
     Console.WriteLine("Opcional: SICOOB_ACCESS_TOKEN para usar um token Bearer já emitido pelo portal de sandbox, pulando o fluxo OAuth2.");
     Console.WriteLine("Opcional: SICOOB_TOKEN_ENDPOINT para sobrescrever o endpoint de token padrão do Sicoob.");
     Console.WriteLine("Opcional: SICOOB_CONFIRMAR_PAGAMENTO=true para também testar PagarBoletoAsync (cuidado: dispara um pagamento real, mesmo em sandbox).");
+    Console.WriteLine("Opcional: SICOOB_ID_LANCAMENTO para fixar o lançamento usado na idempotency key (default: timestamp gerado a cada execução).");
     return 1;
 }
 
@@ -123,7 +126,7 @@ try
         },
     };
 
-    var idempotencyKey = IdempotencyKey.New(numeroCooperativa, numeroConta);
+    var idempotencyKey = IdempotencyKey.New(idLancamento);
     var resultado = await client.PagarBoletoAsync(codigoBarras!, request, idempotencyKey);
 
     if (resultado.PendenteAssinatura)

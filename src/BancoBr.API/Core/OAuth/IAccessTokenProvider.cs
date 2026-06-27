@@ -12,5 +12,11 @@ namespace BancoBr.API.Core.OAuth
     public interface IAccessTokenProvider
     {
         Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Descarta o token em cache, forçando a próxima chamada a <see cref="GetAccessTokenAsync"/>
+        /// a obter um novo. Usado quando a API rejeita o token atual (ex.: HTTP 401).
+        /// </summary>
+        void InvalidateToken();
     }
 }

@@ -51,6 +51,12 @@ namespace BancoBr.API.Core.OAuth
             }
         }
 
+        public void InvalidateToken()
+        {
+            _cachedAccessToken = null;
+            _expiresAt = DateTimeOffset.MinValue;
+        }
+
         private async Task RefreshTokenAsync(CancellationToken cancellationToken)
         {
             var formValues = new List<KeyValuePair<string, string>>
