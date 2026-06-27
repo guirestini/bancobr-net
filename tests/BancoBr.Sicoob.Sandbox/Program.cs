@@ -1,9 +1,10 @@
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
+using BancoBr.API.Pagamentos;
 using BancoBr.API.Sicoob;
 using BancoBr.API.Sicoob.Errors;
-using BancoBr.API.Sicoob.Pagamentos.Boletos;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
+using BancoBr.Common.Enums;
 
 // Console standalone para validar a integração Sicoob (PagamentoBoletoClient) contra um
 // ambiente real (sandbox/homologação), sem depender de um ERP. Nenhuma credencial é lida
@@ -65,8 +66,8 @@ if (!string.IsNullOrWhiteSpace(tokenEndpoint))
 }
 
 var client = usarTokenFixo
-    ? new PagamentoBoletoClient(options, new StaticAccessTokenProvider(accessToken!))
-    : new PagamentoBoletoClient(options);
+    ? PagamentoBoletoApi.Criar(BancoEnum.Sicoob, options, new StaticAccessTokenProvider(accessToken!))
+    : PagamentoBoletoApi.Criar(BancoEnum.Sicoob, options);
 
 try
 {

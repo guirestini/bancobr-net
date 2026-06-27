@@ -1,0 +1,49 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using BancoBr.API.Core.Http;
+using BancoBr.API.Pagamentos;
+using BancoBr.API.Sicoob;
+using BancoBr.API.Sicoob.Pagamentos.Boletos;
+using BancoBr.Common.Enums;
+using Xunit;
+
+namespace BancoBr.Tests.Sicoob
+{
+    public class PagamentoBoletoApiTests
+    {
+        private static CertificateSource CriarCertificateSourceFake()
+        {
+            using var rsa = RSA.Create(2048);
+            var request = new CertificateRequest("CN=fake", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            var certificado = request.CreateSelfSigned(DateTimeOffset.Now, DateTimeOffset.Now.AddDays(1));
+            var pfxBytes = certificado.Export(X509ContentType.Pfx, "senha");
+            return CertificateSource.FromPfxBytes(pfxBytes, "senha");
+        }
+
+        [Fact]
+        public void Criar_BancoSicoob_RetornaPagamentoBoletoClient()
+        {
+            var options = new SicoobApiOptions
+            {
+                ClientId = "fake-client-id",
+                CertificateSource = CriarCertificateSourceFake(),
+            };
+
+            var resultado = PagamentoBoletoApi.Criar(BancoEnum.Sicoob, options, new FakeOAuthTokenProvider());
+
+            Assert.IsType<PagamentoBoletoClient>(resultado);
+        }
+
+        [Fact]
+        public void Criar_BancoNaoImplementado_LancaException()
+        {
+            var options = new SicoobApiOptions
+            {
+                ClientId = "fake-client-id",
+                CertificateSource = CriarCertificateSourceFake(),
+            };
+
+            Assert.Throws<System.Exception>(() => PagamentoBoletoApi.Criar(BancoEnum.BradescoSA, options, new FakeOAuthTokenProvider()));
+        }
+    }
+}

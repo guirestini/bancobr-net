@@ -1,5 +1,5 @@
 using System;
-using BancoBr.API.Core.Http;
+using BancoBr.API.Base;
 
 namespace BancoBr.API.Sicoob
 {
@@ -9,7 +9,7 @@ namespace BancoBr.API.Sicoob
     /// scopes exigidos, rate limit) ficam embutidos no cliente daquela API, não aqui — o
     /// consumidor (ERP) não deveria precisar conhecer URLs ou nomes de scope do Sicoob.
     /// </summary>
-    public class SicoobApiOptions
+    public class SicoobApiOptions : BancoApiOptions
     {
         /// <summary>
         /// Endpoint OAuth2 (client_credentials) do Sicoob, igual para qualquer API/produto e
@@ -17,11 +17,5 @@ namespace BancoBr.API.Sicoob
         /// (ex.: um ambiente de testes com realm próprio).
         /// </summary>
         public Uri TokenEndpoint { get; set; } = new Uri("https://auth.sicoob.com.br/auth/realms/cooperado/protocol/openid-connect/token");
-
-        public string ClientId { get; set; }
-
-        public string ClientSecret { get; set; }
-
-        public CertificateSource CertificateSource { get; set; }
     }
 }

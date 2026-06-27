@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using BancoBr.API.Base;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
-using BancoBr.API.Pagamentos;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
 using BancoBr.Common.Enums;
@@ -18,7 +17,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
     /// <summary>
     /// Cliente para a API "Pagamentos de Boletos" (Cobrança Bancária) do Sicoob, v3.
     /// </summary>
-    public class PagamentoBoletoClient : BancoApiClientBase, IPagamentoBoletoApi
+    public class PagamentoBoletoClient : PagamentoBoletoApiBase
     {
         /// <summary>
         /// Base URL, scopes e rate limit são intrínsecos a esta API específica do Sicoob
@@ -103,7 +102,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return new OAuthTokenProvider(tokenHttpClient, tokenOptions);
         }
 
-        public async Task<BoletoConsultaResponse> ConsultarBoletoAsync(string codigoBarras, long numeroConta, DateTime? dataPagamento = null, CancellationToken cancellationToken = default)
+        public override async Task<BoletoConsultaResponse> ConsultarBoletoAsync(string codigoBarras, long numeroConta, DateTime? dataPagamento = null, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/{codigoBarras}?numeroConta={numeroConta}";
             if (dataPagamento.HasValue)
@@ -115,7 +114,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 .ConfigureAwait(false);
         }
 
-        public async Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroCooperativa, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default)
+        public override async Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroCooperativa, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default)
         {
             var consulta = await ConsultarBoletoAsync(codigoBarras, numeroConta, dataPagamento, cancellationToken).ConfigureAwait(false);
             if (consulta == null)
@@ -153,7 +152,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return await PagarBoletoAsync(codigoBarras, request, idempotencyKey, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<IReadOnlyList<PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<PagamentoBoletoLoteItem> itens, CancellationToken cancellationToken = default)
+        public override async Task<IReadOnlyList<PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<PagamentoBoletoLoteItem> itens, CancellationToken cancellationToken = default)
         {
             var resultados = new List<PagamentoBoletoLoteResultadoItem>();
 
@@ -188,7 +187,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return resultados;
         }
 
-        public async Task<PagamentoBoletoResultado> PagarBoletoAsync(string codigoBarras, BoletoPagamentoRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        public override async Task<PagamentoBoletoResultado> PagarBoletoAsync(string codigoBarras, BoletoPagamentoRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/{codigoBarras}";
             var json = JsonSerializer.Serialize(request, SerializerOptions);
@@ -214,14 +213,14 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             }
         }
 
-        public async Task<ComprovantePagamento> ConsultarComprovantePorIdAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
+        public override async Task<ComprovantePagamento> ConsultarComprovantePorIdAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/{idPagamento}/comprovantes?numeroConta={numeroConta}";
             return await SendAsync<ComprovantePagamento>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        public async Task CancelarAgendamentoAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
+        public override async Task CancelarAgendamentoAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/agendamentos/{idPagamento}";
             var json = JsonSerializer.Serialize(new CancelamentoRequest { NumeroConta = numeroConta }, SerializerOptions);
@@ -233,14 +232,14 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             }
         }
 
-        public async Task<ComprovantePagamento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default)
+        public override async Task<ComprovantePagamento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/{idempotencyKey}/idempotency/comprovantes";
             return await SendAsync<ComprovantePagamento>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        public async Task<System.Collections.Generic.IReadOnlyList<BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, SituacaoBoletoEnum situacao, TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)
+        public override async Task<System.Collections.Generic.IReadOnlyList<BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, SituacaoBoletoEnum situacao, TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos?numeroConta={numeroConta}&dataInicial={dataInicial:yyyy-MM-dd}&dataFinal={dataFinal:yyyy-MM-dd}&situacao={(int)situacao}&tipoData={(int)tipoData}";
 
