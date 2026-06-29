@@ -1,5 +1,5 @@
 using System;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 {
@@ -8,163 +8,163 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// </summary>
     public class BoletoDDA
     {
-        [JsonPropertyName("descricaoTipoPagador")]
+        [JsonProperty("descricaoTipoPagador")]
         public string DescricaoTipoPagador { get; set; }
 
-        [JsonPropertyName("tipoPessoaBeneficiario")]
+        [JsonProperty("tipoPessoaBeneficiario")]
         public string TipoPessoaBeneficiario { get; set; }
 
-        [JsonPropertyName("numeroCpfCnpjBeneficiario")]
+        [JsonProperty("numeroCpfCnpjBeneficiario")]
         public string NumeroCpfCnpjBeneficiario { get; set; }
 
-        [JsonPropertyName("nomeRazaoSocialBeneficiario")]
+        [JsonProperty("nomeRazaoSocialBeneficiario")]
         public string NomeRazaoSocialBeneficiario { get; set; }
 
-        [JsonPropertyName("tipoPessoaPagador")]
+        [JsonProperty("tipoPessoaPagador")]
         public string TipoPessoaPagador { get; set; }
 
-        [JsonPropertyName("numeroCpfCnpjPagador")]
+        [JsonProperty("numeroCpfCnpjPagador")]
         public string NumeroCpfCnpjPagador { get; set; }
 
-        [JsonPropertyName("nomeRazaoSocialPagador")]
+        [JsonProperty("nomeRazaoSocialPagador")]
         public string NomeRazaoSocialPagador { get; set; }
 
-        [JsonPropertyName("nomeFantasiaPagador")]
+        [JsonProperty("nomeFantasiaPagador")]
         public string NomeFantasiaPagador { get; set; }
 
-        [JsonPropertyName("descricaoLogradouroPagador")]
+        [JsonProperty("descricaoLogradouroPagador")]
         public string DescricaoLogradouroPagador { get; set; }
 
-        [JsonPropertyName("descricaoCidadePagador")]
+        [JsonProperty("descricaoCidadePagador")]
         public string DescricaoCidadePagador { get; set; }
 
-        [JsonPropertyName("siglaUfPagador")]
+        [JsonProperty("siglaUfPagador")]
         public string SiglaUfPagador { get; set; }
 
-        [JsonPropertyName("numeroCepPagador")]
+        [JsonProperty("numeroCepPagador")]
         public string NumeroCepPagador { get; set; }
 
-        [JsonPropertyName("tipoPessoaAvalista")]
+        [JsonProperty("tipoPessoaAvalista")]
         public string TipoPessoaAvalista { get; set; }
 
-        [JsonPropertyName("numeroCpfCnpjAvalista")]
+        [JsonProperty("numeroCpfCnpjAvalista")]
         public string NumeroCpfCnpjAvalista { get; set; }
 
-        [JsonPropertyName("nomeAvalista")]
+        [JsonProperty("nomeAvalista")]
         public string NomeAvalista { get; set; }
 
-        [JsonPropertyName("valorBoleto")]
+        [JsonProperty("valorBoleto")]
         public decimal ValorBoleto { get; set; }
 
-        [JsonPropertyName("dataVencimentoBoleto")]
+        [JsonProperty("dataVencimentoBoleto")]
         public DateTime DataVencimentoBoleto { get; set; }
 
-        [JsonPropertyName("codigoTipoSituacaoBoleto")]
+        [JsonProperty("codigoTipoSituacaoBoleto")]
         public int CodigoTipoSituacaoBoleto { get; set; }
 
-        [JsonPropertyName("descricaoSituacaoBoleto")]
+        [JsonProperty("descricaoSituacaoBoleto")]
         public string DescricaoSituacaoBoleto { get; set; }
 
-        [JsonPropertyName("numeroIdentificadorBoletoCip")]
+        [JsonProperty("numeroIdentificadorBoletoCip")]
         public long NumeroIdentificadorBoletoCip { get; set; }
 
-        [JsonPropertyName("numeroCodigoBarras")]
+        [JsonProperty("numeroCodigoBarras")]
         public string NumeroCodigoBarras { get; set; }
 
-        [JsonPropertyName("numeroCpfCnpjPagadorEletronico")]
+        [JsonProperty("numeroCpfCnpjPagadorEletronico")]
         public string NumeroCpfCnpjPagadorEletronico { get; set; }
 
-        [JsonPropertyName("aceite")]
+        [JsonProperty("aceite")]
         public bool Aceite { get; set; }
 
-        [JsonPropertyName("numeroNossoNumero")]
+        [JsonProperty("numeroNossoNumero")]
         public string NumeroNossoNumero { get; set; }
 
-        [JsonPropertyName("numeroDocumento")]
+        [JsonProperty("numeroDocumento")]
         public string NumeroDocumento { get; set; }
 
-        [JsonPropertyName("dataPagamento")]
+        [JsonProperty("dataPagamento")]
         public DateTime? DataPagamento { get; set; }
 
-        [JsonPropertyName("valorPagamento")]
+        [JsonProperty("valorPagamento")]
         public decimal? ValorPagamento { get; set; }
 
-        [JsonPropertyName("codigoEspecieDocumento")]
+        [JsonProperty("codigoEspecieDocumento")]
         public int CodigoEspecieDocumento { get; set; }
 
-        [JsonPropertyName("dataEmissao")]
+        [JsonProperty("dataEmissao")]
         public DateTime DataEmissao { get; set; }
 
-        [JsonPropertyName("dataLimitePagamento")]
+        [JsonProperty("dataLimitePagamento")]
         public string DataLimitePagamento { get; set; }
 
-        [JsonPropertyName("codigoTipoJuros")]
+        [JsonProperty("codigoTipoJuros")]
         public int CodigoTipoJuros { get; set; }
 
-        [JsonPropertyName("dataJuros")]
+        [JsonProperty("dataJuros")]
         public DateTime? DataJuros { get; set; }
 
-        [JsonPropertyName("valorPercentualJuros")]
+        [JsonProperty("valorPercentualJuros")]
         public decimal ValorPercentualJuros { get; set; }
 
-        [JsonPropertyName("codigoTipoMulta")]
+        [JsonProperty("codigoTipoMulta")]
         public int CodigoTipoMulta { get; set; }
 
-        [JsonPropertyName("dataMulta")]
+        [JsonProperty("dataMulta")]
         public DateTime? DataMulta { get; set; }
 
-        [JsonPropertyName("valorPercentualMulta")]
+        [JsonProperty("valorPercentualMulta")]
         public decimal ValorPercentualMulta { get; set; }
 
-        [JsonPropertyName("valorAbatimento")]
+        [JsonProperty("valorAbatimento")]
         public decimal ValorAbatimento { get; set; }
 
-        [JsonPropertyName("codigoTipoDesconto1")]
+        [JsonProperty("codigoTipoDesconto1")]
         public string CodigoTipoDesconto1 { get; set; }
 
-        [JsonPropertyName("dataDesconto1")]
+        [JsonProperty("dataDesconto1")]
         public DateTime? DataDesconto1 { get; set; }
 
-        [JsonPropertyName("valorPercentualDesconto1")]
+        [JsonProperty("valorPercentualDesconto1")]
         public decimal ValorPercentualDesconto1 { get; set; }
 
-        [JsonPropertyName("codigoTipoDesconto2")]
+        [JsonProperty("codigoTipoDesconto2")]
         public string CodigoTipoDesconto2 { get; set; }
 
-        [JsonPropertyName("dataDesconto2")]
+        [JsonProperty("dataDesconto2")]
         public string DataDesconto2 { get; set; }
 
-        [JsonPropertyName("valorPercentualDesconto2")]
+        [JsonProperty("valorPercentualDesconto2")]
         public decimal ValorPercentualDesconto2 { get; set; }
 
-        [JsonPropertyName("codigoTipoDesconto3")]
+        [JsonProperty("codigoTipoDesconto3")]
         public string CodigoTipoDesconto3 { get; set; }
 
-        [JsonPropertyName("dataDesconto3")]
+        [JsonProperty("dataDesconto3")]
         public string DataDesconto3 { get; set; }
 
-        [JsonPropertyName("valorPercentualDesconto3")]
+        [JsonProperty("valorPercentualDesconto3")]
         public decimal ValorPercentualDesconto3 { get; set; }
 
-        [JsonPropertyName("numeroDiasProtesto")]
+        [JsonProperty("numeroDiasProtesto")]
         public int NumeroDiasProtesto { get; set; }
 
-        [JsonPropertyName("quantidadePagamentoParcial")]
+        [JsonProperty("quantidadePagamentoParcial")]
         public int QuantidadePagamentoParcial { get; set; }
 
-        [JsonPropertyName("codigoAutorizacaoValorDivergente")]
+        [JsonProperty("codigoAutorizacaoValorDivergente")]
         public int CodigoAutorizacaoValorDivergente { get; set; }
 
-        [JsonPropertyName("codigoIndicadorValorMaximo")]
+        [JsonProperty("codigoIndicadorValorMaximo")]
         public string CodigoIndicadorValorMaximo { get; set; }
 
-        [JsonPropertyName("valorPercentualMaximo")]
+        [JsonProperty("valorPercentualMaximo")]
         public decimal ValorPercentualMaximo { get; set; }
 
-        [JsonPropertyName("codigoIndicadorValorMinimo")]
+        [JsonProperty("codigoIndicadorValorMinimo")]
         public string CodigoIndicadorValorMinimo { get; set; }
 
-        [JsonPropertyName("valorPercentualMinimo")]
+        [JsonProperty("valorPercentualMinimo")]
         public decimal ValorPercentualMinimo { get; set; }
     }
 }

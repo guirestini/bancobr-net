@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 {
@@ -8,7 +8,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// </summary>
     internal class ResultadoEnvelope<T>
     {
-        [JsonPropertyName("resultado")]
+        [JsonProperty("resultado")]
         public T Resultado { get; set; }
     }
 }

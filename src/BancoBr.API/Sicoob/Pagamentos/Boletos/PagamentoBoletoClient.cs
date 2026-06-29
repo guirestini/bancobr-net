@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using BancoBr.API.Base;
@@ -11,6 +10,7 @@ using BancoBr.API.Core.OAuth;
 using BancoBr.API.Pagamentos.Models;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos
 {
@@ -40,7 +40,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
         private readonly IAccessTokenProvider _tokenProvider;
         private readonly string _clientId;
         private readonly string _baseUrl;
-        private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions();
+        private static readonly JsonSerializerSettings SerializerSettings = new JsonSerializerSettings();
 
         internal PagamentoBoletoClient(string clientId, string clientSecret, CertificateSource certificateSource, Uri tokenEndpoint = null)
             : this(clientId, certificateSource, BuildTokenProvider(clientId, clientSecret, certificateSource, tokenEndpoint ?? DefaultTokenEndpoint))
@@ -198,7 +198,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
         public override async Task<PagamentoBoletoResultado> PagarBoletoAsync(string codigoBarras, BoletoPagamentoRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/{codigoBarras}";
-            var json = JsonSerializer.Serialize(request, SerializerOptions);
+            var json = JsonConvert.SerializeObject(request, SerializerSettings);
 
             using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Post, url, json, idempotencyKey), cancellationToken).ConfigureAwait(false))
             {
@@ -215,7 +215,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                var envelope = JsonSerializer.Deserialize<ResultadoEnvelope<ComprovantePagamento>>(body, SerializerOptions);
+                var envelope = JsonConvert.DeserializeObject<ResultadoEnvelope<ComprovantePagamento>>(body, SerializerSettings);
                 return PagamentoBoletoResultado.Efetivado(envelope.Resultado);
             }
         }
@@ -230,7 +230,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
         public override async Task CancelarAgendamentoAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/agendamentos/{idPagamento}";
-            var json = JsonSerializer.Serialize(new CancelamentoRequest { NumeroConta = numeroConta }, SerializerOptions);
+            var json = JsonConvert.SerializeObject(new CancelamentoRequest { NumeroConta = numeroConta }, SerializerSettings);
 
             using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Delete, url, json, idempotencyKey: null), cancellationToken).ConfigureAwait(false))
             {
@@ -259,7 +259,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                return JsonSerializer.Deserialize<BoletoDDA[]>(body, SerializerOptions);
+                return JsonConvert.DeserializeObject<BoletoDDA[]>(body, SerializerSettings);
             }
         }
 
@@ -275,7 +275,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
 
                 var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                var envelope = JsonSerializer.Deserialize<ResultadoEnvelope<T>>(responseBody, SerializerOptions);
+                var envelope = JsonConvert.DeserializeObject<ResultadoEnvelope<T>>(responseBody, SerializerSettings);
                 return envelope.Resultado;
             }
         }
@@ -334,7 +334,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             SicoobErrorResponse errorResponse;
             try
             {
-                errorResponse = JsonSerializer.Deserialize<SicoobErrorResponse>(body, SerializerOptions);
+                errorResponse = JsonConvert.DeserializeObject<SicoobErrorResponse>(body, SerializerSettings);
             }
             catch (JsonException)
             {

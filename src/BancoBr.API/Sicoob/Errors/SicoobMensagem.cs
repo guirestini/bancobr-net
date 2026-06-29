@@ -1,13 +1,13 @@
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Errors
 {
     public class SicoobMensagem
     {
-        [JsonPropertyName("mensagem")]
+        [JsonProperty("mensagem")]
         public string Mensagem { get; set; }
 
-        [JsonPropertyName("codigo")]
+        [JsonProperty("codigo")]
         public string Codigo { get; set; }
     }
 }

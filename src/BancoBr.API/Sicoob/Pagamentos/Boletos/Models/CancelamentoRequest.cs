@@ -1,10 +1,10 @@
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 {
     public class CancelamentoRequest
     {
-        [JsonPropertyName("numeroConta")]
+        [JsonProperty("numeroConta")]
         public long NumeroConta { get; set; }
     }
 }

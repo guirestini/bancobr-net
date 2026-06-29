@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 namespace BancoBr.API.Core.OAuth
 {
@@ -82,19 +82,14 @@ namespace BancoBr.API.Core.OAuth
                 response.EnsureSuccessStatusCode();
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                using (var json = JsonDocument.Parse(body))
-                {
-                    var root = json.RootElement;
-                    _cachedAccessToken = root.GetProperty("access_token").GetString();
+                var root = JObject.Parse(body);
+                _cachedAccessToken = (string)root["access_token"];
 
-                    var expiresInSeconds = root.TryGetProperty("expires_in", out var expiresInElement)
-                        ? expiresInElement.GetInt32()
-                        : 0;
+                var expiresInSeconds = root["expires_in"]?.Value<int>() ?? 0;
 
-                    // Renova um pouco antes do vencimento real para evitar usar um token expirado em trânsito.
-                    var safetyMargin = TimeSpan.FromSeconds(Math.Min(30, expiresInSeconds / 4.0));
-                    _expiresAt = DateTimeOffset.UtcNow.AddSeconds(expiresInSeconds) - safetyMargin;
-                }
+                // Renova um pouco antes do vencimento real para evitar usar um token expirado em trânsito.
+                var safetyMargin = TimeSpan.FromSeconds(Math.Min(30, expiresInSeconds / 4.0));
+                _expiresAt = DateTimeOffset.UtcNow.AddSeconds(expiresInSeconds) - safetyMargin;
             }
         }
     }

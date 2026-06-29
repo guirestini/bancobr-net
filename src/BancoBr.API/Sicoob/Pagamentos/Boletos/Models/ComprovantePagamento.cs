@@ -1,5 +1,5 @@
 using System;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 {
@@ -10,88 +10,88 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// </summary>
     public class ComprovantePagamento
     {
-        [JsonPropertyName("numeroAgencia")]
+        [JsonProperty("numeroAgencia")]
         public string NumeroAgencia { get; set; }
 
-        [JsonPropertyName("nomeAgencia")]
+        [JsonProperty("nomeAgencia")]
         public string NomeAgencia { get; set; }
 
-        [JsonPropertyName("numeroConta")]
+        [JsonProperty("numeroConta")]
         public long NumeroConta { get; set; }
 
-        [JsonPropertyName("nomeProprietarioContaCorrente")]
+        [JsonProperty("nomeProprietarioContaCorrente")]
         public string NomeProprietarioContaCorrente { get; set; }
 
-        [JsonPropertyName("numeroLinhaDigitavel")]
+        [JsonProperty("numeroLinhaDigitavel")]
         public string NumeroLinhaDigitavel { get; set; }
 
-        [JsonPropertyName("numeroInstituicaoEmissora")]
+        [JsonProperty("numeroInstituicaoEmissora")]
         public int NumeroInstituicaoEmissora { get; set; }
 
-        [JsonPropertyName("nomeInstituicaoEmissora")]
+        [JsonProperty("nomeInstituicaoEmissora")]
         public string NomeInstituicaoEmissora { get; set; }
 
-        [JsonPropertyName("numeroCpfCnpjBeneficiario")]
+        [JsonProperty("numeroCpfCnpjBeneficiario")]
         public string NumeroCpfCnpjBeneficiario { get; set; }
 
-        [JsonPropertyName("nomeRazaoSocialBeneficiario")]
+        [JsonProperty("nomeRazaoSocialBeneficiario")]
         public string NomeRazaoSocialBeneficiario { get; set; }
 
-        [JsonPropertyName("numeroCpfCnpjPagador")]
+        [JsonProperty("numeroCpfCnpjPagador")]
         public string NumeroCpfCnpjPagador { get; set; }
 
-        [JsonPropertyName("nomeRazaoSocialPagador")]
+        [JsonProperty("nomeRazaoSocialPagador")]
         public string NomeRazaoSocialPagador { get; set; }
 
-        [JsonPropertyName("dataVencimento")]
+        [JsonProperty("dataVencimento")]
         public DateTime DataVencimento { get; set; }
 
-        [JsonPropertyName("valorBoleto")]
+        [JsonProperty("valorBoleto")]
         public decimal ValorBoleto { get; set; }
 
-        [JsonPropertyName("valorAbatimentoDesconto")]
+        [JsonProperty("valorAbatimentoDesconto")]
         public decimal ValorAbatimentoDesconto { get; set; }
 
-        [JsonPropertyName("valorMultaMora")]
+        [JsonProperty("valorMultaMora")]
         public decimal ValorMultaMora { get; set; }
 
-        [JsonPropertyName("valorPagamento")]
+        [JsonProperty("valorPagamento")]
         public decimal ValorPagamento { get; set; }
 
-        [JsonPropertyName("dataPagamento")]
+        [JsonProperty("dataPagamento")]
         public DateTime DataPagamento { get; set; }
 
-        [JsonPropertyName("situacaoPagamento")]
+        [JsonProperty("situacaoPagamento")]
         public string SituacaoPagamento { get; set; }
 
-        [JsonPropertyName("descricaoDetalheSituacao")]
+        [JsonProperty("descricaoDetalheSituacao")]
         public string DescricaoDetalheSituacao { get; set; }
 
-        [JsonPropertyName("dataHoraCadastro")]
+        [JsonProperty("dataHoraCadastro")]
         public DateTime? DataHoraCadastro { get; set; }
 
-        [JsonPropertyName("aceitaValorDivergente")]
+        [JsonProperty("aceitaValorDivergente")]
         public bool AceitaValorDivergente { get; set; }
 
-        [JsonPropertyName("nossoNumero")]
+        [JsonProperty("nossoNumero")]
         public string NossoNumero { get; set; }
 
-        [JsonPropertyName("numeroDocumento")]
+        [JsonProperty("numeroDocumento")]
         public string NumeroDocumento { get; set; }
 
-        [JsonPropertyName("descricaoObservacao")]
+        [JsonProperty("descricaoObservacao")]
         public string DescricaoObservacao { get; set; }
 
-        [JsonPropertyName("descricaoOuvidoria")]
+        [JsonProperty("descricaoOuvidoria")]
         public string DescricaoOuvidoria { get; set; }
 
-        [JsonPropertyName("descricaoTituloComprovante")]
+        [JsonProperty("descricaoTituloComprovante")]
         public string DescricaoTituloComprovante { get; set; }
 
-        [JsonPropertyName("idPagamento")]
+        [JsonProperty("idPagamento")]
         public long IdPagamento { get; set; }
 
-        [JsonPropertyName("numeroAutenticacaoPagamento")]
+        [JsonProperty("numeroAutenticacaoPagamento")]
         public string NumeroAutenticacaoPagamento { get; set; }
     }
 }

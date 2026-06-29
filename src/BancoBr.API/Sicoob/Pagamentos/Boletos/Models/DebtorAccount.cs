@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 {
@@ -8,19 +8,19 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     public class DebtorAccount
     {
         /// <summary>Número da cooperativa da conta.</summary>
-        [JsonPropertyName("issuer")]
+        [JsonProperty("issuer")]
         public int Issuer { get; set; }
 
         /// <summary>Número da conta habilitada para pagamentos via API.</summary>
-        [JsonPropertyName("number")]
+        [JsonProperty("number")]
         public long Number { get; set; }
 
         /// <summary>0 - Conta Corrente.</summary>
-        [JsonPropertyName("accountType")]
+        [JsonProperty("accountType")]
         public int AccountType { get; set; }
 
         /// <summary>0 - Pessoa Física, 1 - Pessoa Jurídica.</summary>
-        [JsonPropertyName("personType")]
+        [JsonProperty("personType")]
         public int PersonType { get; set; }
     }
 }

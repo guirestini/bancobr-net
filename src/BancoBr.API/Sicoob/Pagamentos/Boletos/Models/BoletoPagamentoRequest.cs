@@ -1,5 +1,5 @@
 using System;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 {
@@ -9,38 +9,38 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     public class BoletoPagamentoRequest
     {
         /// <summary>Identificador retornado pela consulta prévia (BoletoConsultaResponse.IdentificadorConsulta).</summary>
-        [JsonPropertyName("identificadorConsulta")]
+        [JsonProperty("identificadorConsulta")]
         public string IdentificadorConsulta { get; set; }
 
-        [JsonPropertyName("valorBoleto")]
+        [JsonProperty("valorBoleto")]
         public decimal ValorBoleto { get; set; }
 
-        [JsonPropertyName("valorDescontoAbatimento")]
+        [JsonProperty("valorDescontoAbatimento")]
         public decimal ValorDescontoAbatimento { get; set; }
 
-        [JsonPropertyName("valorMultaMora")]
+        [JsonProperty("valorMultaMora")]
         public decimal ValorMultaMora { get; set; }
 
-        [JsonPropertyName("descricaoObservacao")]
+        [JsonProperty("descricaoObservacao")]
         public string DescricaoObservacao { get; set; }
 
-        [JsonPropertyName("aceitaValorDivergente")]
+        [JsonProperty("aceitaValorDivergente")]
         public bool AceitaValorDivergente { get; set; }
 
-        [JsonPropertyName("numeroCpfCnpjPortador")]
+        [JsonProperty("numeroCpfCnpjPortador")]
         public string NumeroCpfCnpjPortador { get; set; }
 
-        [JsonPropertyName("nomePortador")]
+        [JsonProperty("nomePortador")]
         public string NomePortador { get; set; }
 
-        [JsonPropertyName("amount")]
+        [JsonProperty("amount")]
         public decimal Amount { get; set; }
 
-        [JsonPropertyName("date")]
+        [JsonProperty("date")]
         [JsonConverter(typeof(DateOnlyJsonConverter))]
         public DateTime Date { get; set; }
 
-        [JsonPropertyName("debtorAccount")]
+        [JsonProperty("debtorAccount")]
         public DebtorAccount DebtorAccount { get; set; }
     }
 }

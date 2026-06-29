@@ -1,25 +1,26 @@
 using System;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 {
     /// <summary>
     /// O Sicoob espera datas no formato yyyy-MM-dd (sem componente de hora) nos payloads
-    /// de requisição. O conversor padrão do System.Text.Json grava o horário também.
+    /// de requisição. O conversor padrão do Newtonsoft.Json grava o horário também.
     /// </summary>
-    public class DateOnlyJsonConverter : JsonConverter<DateTime>
+    public class DateOnlyJsonConverter : JsonConverter
     {
         private const string Format = "yyyy-MM-dd";
 
-        public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public override bool CanConvert(Type objectType) => objectType == typeof(DateTime);
+
+        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
-            return DateTime.Parse(reader.GetString());
+            return DateTime.Parse((string)reader.Value);
         }
 
-        public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
-            writer.WriteStringValue(value.ToString(Format));
+            writer.WriteValue(((DateTime)value).ToString(Format));
         }
     }
 }

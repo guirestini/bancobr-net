@@ -1,11 +1,11 @@
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Errors
 {
     public class SicoobErrorResponse
     {
-        [JsonPropertyName("mensagens")]
+        [JsonProperty("mensagens")]
         public List<SicoobMensagem> Mensagens { get; set; } = new List<SicoobMensagem>();
     }
 }

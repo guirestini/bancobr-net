@@ -1,5 +1,5 @@
 using System;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 {
@@ -9,92 +9,92 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// </summary>
     public class BoletoConsultaResponse
     {
-        [JsonPropertyName("numeroInstituicaoEmissora")]
+        [JsonProperty("numeroInstituicaoEmissora")]
         public int NumeroInstituicaoEmissora { get; set; }
 
-        [JsonPropertyName("nomeInstituicaoEmissora")]
+        [JsonProperty("nomeInstituicaoEmissora")]
         public string NomeInstituicaoEmissora { get; set; }
 
-        [JsonPropertyName("tipoPessoaBeneficiario")]
+        [JsonProperty("tipoPessoaBeneficiario")]
         public string TipoPessoaBeneficiario { get; set; }
 
-        [JsonPropertyName("numeroCpfCnpjBeneficiario")]
+        [JsonProperty("numeroCpfCnpjBeneficiario")]
         public string NumeroCpfCnpjBeneficiario { get; set; }
 
-        [JsonPropertyName("nomeRazaoSocialBeneficiario")]
+        [JsonProperty("nomeRazaoSocialBeneficiario")]
         public string NomeRazaoSocialBeneficiario { get; set; }
 
-        [JsonPropertyName("nomeFantasiaBeneficiario")]
+        [JsonProperty("nomeFantasiaBeneficiario")]
         public string NomeFantasiaBeneficiario { get; set; }
 
-        [JsonPropertyName("tipoPessoaPagador")]
+        [JsonProperty("tipoPessoaPagador")]
         public string TipoPessoaPagador { get; set; }
 
-        [JsonPropertyName("numeroCpfCnpjPagador")]
+        [JsonProperty("numeroCpfCnpjPagador")]
         public string NumeroCpfCnpjPagador { get; set; }
 
-        [JsonPropertyName("nomeRazaoSocialPagador")]
+        [JsonProperty("nomeRazaoSocialPagador")]
         public string NomeRazaoSocialPagador { get; set; }
 
-        [JsonPropertyName("codigoBarras")]
+        [JsonProperty("codigoBarras")]
         public string CodigoBarras { get; set; }
 
-        [JsonPropertyName("numeroLinhaDigitavel")]
+        [JsonProperty("numeroLinhaDigitavel")]
         public string NumeroLinhaDigitavel { get; set; }
 
-        [JsonPropertyName("dataVencimentoBoleto")]
+        [JsonProperty("dataVencimentoBoleto")]
         public DateTime DataVencimentoBoleto { get; set; }
 
-        [JsonPropertyName("dataLimitePagamentoBoleto")]
+        [JsonProperty("dataLimitePagamentoBoleto")]
         public DateTime? DataLimitePagamentoBoleto { get; set; }
 
-        [JsonPropertyName("valorBoleto")]
+        [JsonProperty("valorBoleto")]
         public decimal ValorBoleto { get; set; }
 
-        [JsonPropertyName("valorAbatimentoDesconto")]
+        [JsonProperty("valorAbatimentoDesconto")]
         public decimal ValorAbatimentoDesconto { get; set; }
 
-        [JsonPropertyName("valorMultaMora")]
+        [JsonProperty("valorMultaMora")]
         public decimal ValorMultaMora { get; set; }
 
-        [JsonPropertyName("valorPagamento")]
+        [JsonProperty("valorPagamento")]
         public decimal ValorPagamento { get; set; }
 
-        [JsonPropertyName("dataPagamento")]
+        [JsonProperty("dataPagamento")]
         public DateTime DataPagamento { get; set; }
 
-        [JsonPropertyName("permiteAlterarValor")]
+        [JsonProperty("permiteAlterarValor")]
         public bool PermiteAlterarValor { get; set; }
 
-        [JsonPropertyName("consultaEmContingencia")]
+        [JsonProperty("consultaEmContingencia")]
         public bool ConsultaEmContingencia { get; set; }
 
-        [JsonPropertyName("codigoEspecieDocumento")]
+        [JsonProperty("codigoEspecieDocumento")]
         public int? CodigoEspecieDocumento { get; set; }
 
-        [JsonPropertyName("codigoSituacaoBoletoPagamento")]
+        [JsonProperty("codigoSituacaoBoletoPagamento")]
         public string CodigoSituacaoBoletoPagamento { get; set; }
 
-        [JsonPropertyName("nossoNumero")]
+        [JsonProperty("nossoNumero")]
         public string NossoNumero { get; set; }
 
-        [JsonPropertyName("numeroDocumento")]
+        [JsonProperty("numeroDocumento")]
         public string NumeroDocumento { get; set; }
 
         /// <summary>
         /// Identificador retornado pela consulta. Deve ser enviado de volta no corpo de
         /// POST /boletos/pagamentos/{codigoBarras} (BoletoPagamentoRequest.IdentificadorConsulta).
         /// </summary>
-        [JsonPropertyName("identificadorConsulta")]
+        [JsonProperty("identificadorConsulta")]
         public string IdentificadorConsulta { get; set; }
 
-        [JsonPropertyName("descricaoInstrucaoValorMinMax")]
+        [JsonProperty("descricaoInstrucaoValorMinMax")]
         public string DescricaoInstrucaoValorMinMax { get; set; }
 
-        [JsonPropertyName("bloquearPagamento")]
+        [JsonProperty("bloquearPagamento")]
         public bool BloquearPagamento { get; set; }
 
-        [JsonPropertyName("mensagemBloqueioPagamento")]
+        [JsonProperty("mensagemBloqueioPagamento")]
         public string MensagemBloqueioPagamento { get; set; }
     }
 }
