@@ -1,5 +1,5 @@
 using System.Net;
-using BancoBr.API.Pagamentos.Models;
+using BancoBr.API.Core.Models;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;

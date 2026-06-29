@@ -1,7 +1,8 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using BancoBr.API.Base;
+using BancoBr.API.Core;
 using BancoBr.API.Core.Http;
-using BancoBr.API.Pagamentos;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
 using BancoBr.Common.Enums;
 using Xunit;
@@ -22,7 +23,7 @@ namespace BancoBr.Tests.Sicoob
         [Fact]
         public void Criar_BancoSicoob_RetornaPagamentoBoletoClient()
         {
-            var resultado = PagamentoBoletoApi.Criar(BancoEnum.Sicoob, "fake-client-id", CriarCertificateSourceFake(), new FakeOAuthTokenProvider());
+            var resultado = BancoApi.Criar<PagamentoBoletoApiBase>(BancoEnum.Sicoob, "fake-client-id", CriarCertificateSourceFake(), new FakeOAuthTokenProvider());
 
             Assert.IsType<PagamentoBoletoClient>(resultado);
         }
@@ -30,7 +31,7 @@ namespace BancoBr.Tests.Sicoob
         [Fact]
         public void Criar_BancoNaoImplementado_LancaException()
         {
-            Assert.Throws<System.Exception>(() => PagamentoBoletoApi.Criar(BancoEnum.BradescoSA, "fake-client-id", CriarCertificateSourceFake(), new FakeOAuthTokenProvider()));
+            Assert.Throws<System.Exception>(() => BancoApi.Criar<PagamentoBoletoApiBase>(BancoEnum.BradescoSA, "fake-client-id", CriarCertificateSourceFake(), new FakeOAuthTokenProvider()));
         }
     }
 }

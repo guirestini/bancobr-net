@@ -1,6 +1,6 @@
 using System;
 
-namespace BancoBr.API.Pagamentos.Models
+namespace BancoBr.API.Core.Models
 {
     /// <summary>
     /// Constrói o valor exigido pelo header x-idempotency-key: {idLancamento}-{acao}.
