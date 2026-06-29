@@ -16,7 +16,7 @@ string? accessToken = Environment.GetEnvironmentVariable("SICOOB_ACCESS_TOKEN");
 string? tokenEndpoint = Environment.GetEnvironmentVariable("SICOOB_TOKEN_ENDPOINT");
 string? certPfxPath = Environment.GetEnvironmentVariable("SICOOB_CERT_PFX_PATH");
 string? certPassword = Environment.GetEnvironmentVariable("SICOOB_CERT_PASSWORD");
-string? numeroCooperativaText = Environment.GetEnvironmentVariable("SICOOB_NUMERO_COOPERATIVA");
+string? numeroAgenciaText = Environment.GetEnvironmentVariable("SICOOB_NUMERO_COOPERATIVA");
 string? numeroContaText = Environment.GetEnvironmentVariable("SICOOB_NUMERO_CONTA");
 string? codigoBarras = Environment.GetEnvironmentVariable("SICOOB_CODIGO_BARRAS");
 string idLancamento = Environment.GetEnvironmentVariable("SICOOB_ID_LANCAMENTO") ?? $"SANDBOX-{DateTime.UtcNow:yyyyMMddHHmmss}";
@@ -33,7 +33,7 @@ var faltando = new List<string>();
 if (string.IsNullOrWhiteSpace(clientId)) faltando.Add("SICOOB_CLIENT_ID");
 if (string.IsNullOrWhiteSpace(certPfxPath)) faltando.Add("SICOOB_CERT_PFX_PATH");
 if (string.IsNullOrWhiteSpace(certPassword)) faltando.Add("SICOOB_CERT_PASSWORD");
-if (string.IsNullOrWhiteSpace(numeroCooperativaText)) faltando.Add("SICOOB_NUMERO_COOPERATIVA");
+if (string.IsNullOrWhiteSpace(numeroAgenciaText)) faltando.Add("SICOOB_NUMERO_COOPERATIVA");
 if (string.IsNullOrWhiteSpace(numeroContaText)) faltando.Add("SICOOB_NUMERO_CONTA");
 if (string.IsNullOrWhiteSpace(codigoBarras)) faltando.Add("SICOOB_CODIGO_BARRAS");
 
@@ -52,7 +52,7 @@ if (faltando.Count > 0)
     return 1;
 }
 
-var numeroCooperativa = int.Parse(numeroCooperativaText!);
+var numeroAgencia = int.Parse(numeroAgenciaText!);
 var numeroConta = long.Parse(numeroContaText!);
 
 var certificateSource = CertificateSource.FromPfxFile(certPfxPath!, certPassword!);
@@ -109,7 +109,7 @@ try
         NomePortador = consulta.NomeRazaoSocialPagador,
         DebtorAccount = new DebtorAccount
         {
-            Issuer = numeroCooperativa,
+            Issuer = numeroAgencia,
             Number = numeroConta,
             AccountType = 0,
             PersonType = 0,

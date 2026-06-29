@@ -31,7 +31,7 @@ namespace BancoBr.API.Base
         /// IdentificadorConsulta retornado) e a envia. Quando o ERP precisa exibir o valor para
         /// confirmação antes de pagar, use ConsultarBoletoAsync e PagarBoletoAsync separadamente.
         /// </summary>
-        public abstract Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroCooperativa, string idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default);
+        public abstract Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroAgencia, string idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Paga vários boletos em sequência (o Sicoob não tem endpoint de lote — cada item ainda

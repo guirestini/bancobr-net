@@ -121,7 +121,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 .ConfigureAwait(false);
         }
 
-        public override async Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroCooperativa, string idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default)
+        public override async Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroAgencia, string idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default)
         {
             var consulta = await ConsultarBoletoAsync(codigoBarras, numeroConta, dataPagamento, cancellationToken).ConfigureAwait(false);
             if (consulta == null)
@@ -148,7 +148,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 Date = dataPagamento ?? consulta.DataPagamento,
                 DebtorAccount = new DebtorAccount
                 {
-                    Issuer = numeroCooperativa,
+                    Issuer = numeroAgencia,
                     Number = numeroConta,
                     AccountType = 0,
                     PersonType = personType,
@@ -170,7 +170,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                     var resultado = await PagarBoletoComConsultaAsync(
                         item.CodigoBarras,
                         item.NumeroConta,
-                        item.NumeroCooperativa,
+                        item.NumeroAgencia,
                         item.IdLancamento,
                         item.NumeroCpfCnpjPortador,
                         item.NomePortador,

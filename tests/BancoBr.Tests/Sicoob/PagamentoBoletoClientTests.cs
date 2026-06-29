@@ -252,7 +252,7 @@ namespace BancoBr.Tests.Sicoob
             var resultado = await client.PagarBoletoComConsultaAsync(
                 "00000000000000000000000000000000000000000000",
                 numeroConta: 1234569,
-                numeroCooperativa: 4342,
+                numeroAgencia: 4342,
                 idLancamento: "lancamento-1",
                 numeroCpfCnpjPortador: "12345678900",
                 nomePortador: "Rosa Maria da Silva");
@@ -275,7 +275,7 @@ namespace BancoBr.Tests.Sicoob
             var resultado = await client.PagarBoletoComConsultaAsync(
                 "00000000000000000000000000000000000000000000",
                 numeroConta: 1234569,
-                numeroCooperativa: 4342,
+                numeroAgencia: 4342,
                 idLancamento: "lancamento-1",
                 numeroCpfCnpjPortador: "12345678900",
                 nomePortador: "Rosa Maria da Silva");
@@ -294,7 +294,7 @@ namespace BancoBr.Tests.Sicoob
             var resultado = await client.PagarBoletoComConsultaAsync(
                 "00000000000000000000000000000000000000000000",
                 numeroConta: 1234569,
-                numeroCooperativa: 4342,
+                numeroAgencia: 4342,
                 idLancamento: "lancamento-1",
                 numeroCpfCnpjPortador: "12345678900",
                 nomePortador: "Rosa Maria da Silva");
@@ -336,9 +336,9 @@ namespace BancoBr.Tests.Sicoob
             var client = CriarClient(handler);
             var itens = new[]
             {
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-1", NumeroConta = 1234569, NumeroCooperativa = 4342, IdLancamento = "lancamento-1", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 1" },
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-2", NumeroConta = 1234569, NumeroCooperativa = 4342, IdLancamento = "lancamento-2", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 2" },
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-3", NumeroConta = 1234569, NumeroCooperativa = 4342, IdLancamento = "lancamento-3", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 3" },
+                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-1", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = "lancamento-1", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 1" },
+                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-2", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = "lancamento-2", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 2" },
+                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-3", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = "lancamento-3", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 3" },
             };
 
             var resultados = await client.PagarLoteBoletosAsync(itens);
