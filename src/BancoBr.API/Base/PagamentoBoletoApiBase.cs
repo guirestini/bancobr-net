@@ -12,12 +12,14 @@ namespace BancoBr.API.Base
     /// espelha o papel de BancoBr.CNAB.Base.Banco no domínio de geração de CNAB: cada banco
     /// herda e implementa os métodos abaixo de acordo com sua própria API.
     /// </summary>
-    public abstract class PagamentoBoletoApiBase : BancoApiClientBase
+    public abstract class PagamentoBoletoApiBase
     {
-        protected PagamentoBoletoApiBase(int codigo, string nome, HttpClient httpClient)
-            : base(codigo, nome, httpClient)
+        protected PagamentoBoletoApiBase(HttpClient httpClient)
         {
+            HttpClient = httpClient;
         }
+
+        protected HttpClient HttpClient { get; }
 
         public abstract Task<BoletoConsultaResponse> ConsultarBoletoAsync(string codigoBarras, long numeroConta, DateTime? dataPagamento = null, CancellationToken cancellationToken = default);
 

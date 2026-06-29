@@ -2,7 +2,6 @@ using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Pagamentos;
 using BancoBr.API.Pagamentos.Models;
-using BancoBr.API.Sicoob;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
 using BancoBr.Common.Enums;
@@ -56,21 +55,11 @@ var numeroCooperativa = int.Parse(numeroCooperativaText!);
 var numeroConta = long.Parse(numeroContaText!);
 
 var certificateSource = CertificateSource.FromPfxFile(certPfxPath!, certPassword!);
-
-var options = new SicoobApiOptions
-{
-    ClientId = clientId!,
-    CertificateSource = certificateSource,
-};
-
-if (!string.IsNullOrWhiteSpace(tokenEndpoint))
-{
-    options.TokenEndpoint = new Uri(tokenEndpoint);
-}
+var tokenEndpointOverride = string.IsNullOrWhiteSpace(tokenEndpoint) ? null : new Uri(tokenEndpoint);
 
 var client = usarTokenFixo
-    ? PagamentoBoletoApi.Criar(BancoEnum.Sicoob, options, new StaticAccessTokenProvider(accessToken!))
-    : PagamentoBoletoApi.Criar(BancoEnum.Sicoob, options);
+    ? PagamentoBoletoApi.Criar(BancoEnum.Sicoob, clientId!, certificateSource, new StaticAccessTokenProvider(accessToken!))
+    : PagamentoBoletoApi.Criar(BancoEnum.Sicoob, clientId!, clientSecret: null, certificateSource, tokenEndpointOverride);
 
 try
 {

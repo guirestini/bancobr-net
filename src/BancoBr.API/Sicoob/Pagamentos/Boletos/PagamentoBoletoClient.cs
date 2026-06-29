@@ -11,7 +11,6 @@ using BancoBr.API.Core.OAuth;
 using BancoBr.API.Pagamentos.Models;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
-using BancoBr.Common.Enums;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos
 {
@@ -27,6 +26,13 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
         /// </summary>
         public static readonly Uri BaseUrl = new Uri("https://api.sicoob.com.br/pagamentos/v3");
 
+        /// <summary>
+        /// Endpoint OAuth2 (client_credentials) do Sicoob, igual para qualquer API/produto e
+        /// qualquer cooperado. Só precisa ser sobrescrito em cenários fora do padrão
+        /// (ex.: um ambiente de testes com realm próprio) via o parâmetro tokenEndpoint.
+        /// </summary>
+        private static readonly Uri DefaultTokenEndpoint = new Uri("https://auth.sicoob.com.br/auth/realms/cooperado/protocol/openid-connect/token");
+
         private static readonly string[] Scopes = { "pagamentos_consulta", "pagamentos_inclusao", "pagamentos_alteracao" };
 
         private const int RequestsPerSecond = 2;
@@ -36,19 +42,19 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
         private readonly string _baseUrl;
         private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions();
 
-        public PagamentoBoletoClient(SicoobApiOptions options)
-            : this(options, BuildTokenProvider(options))
+        internal PagamentoBoletoClient(string clientId, string clientSecret, CertificateSource certificateSource, Uri tokenEndpoint = null)
+            : this(clientId, certificateSource, BuildTokenProvider(clientId, clientSecret, certificateSource, tokenEndpoint ?? DefaultTokenEndpoint))
         {
         }
 
         /// <summary>
         /// Usa o pipeline HTTP padrão (certificado mTLS + rate limiting) montado a partir de
-        /// <paramref name="options"/>, mas com um provedor de token à escolha do chamador —
-        /// por exemplo, <see cref="StaticAccessTokenProvider"/> quando o ambiente de sandbox
-        /// fornece um Access Token (Bearer) pronto em vez de expor um endpoint OAuth2.
+        /// <paramref name="certificateSource"/>, mas com um provedor de token à escolha do
+        /// chamador — por exemplo, <see cref="StaticAccessTokenProvider"/> quando o ambiente de
+        /// sandbox fornece um Access Token (Bearer) pronto em vez de expor um endpoint OAuth2.
         /// </summary>
-        public PagamentoBoletoClient(SicoobApiOptions options, IAccessTokenProvider tokenProvider)
-            : this(BuildHttpClient(options), tokenProvider, options.ClientId, BaseUrl)
+        internal PagamentoBoletoClient(string clientId, CertificateSource certificateSource, IAccessTokenProvider tokenProvider)
+            : this(BuildHttpClient(certificateSource), tokenProvider, clientId, BaseUrl)
         {
         }
 
@@ -57,7 +63,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
         /// sem certificado real nem chamadas HTTP de fato.
         /// </summary>
         public PagamentoBoletoClient(HttpClient httpClient, IAccessTokenProvider tokenProvider, string clientId, Uri baseUrl)
-            : base((int)BancoEnum.Sicoob, "Sicoob", httpClient)
+            : base(httpClient)
         {
             if (baseUrl == null) throw new ArgumentNullException(nameof(baseUrl));
 
@@ -67,13 +73,13 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             _baseUrl = baseUrlText.EndsWith("/") ? baseUrlText : baseUrlText + "/";
         }
 
-        private static HttpClient BuildHttpClient(SicoobApiOptions options)
+        private static HttpClient BuildHttpClient(CertificateSource certificateSource)
         {
             var certHandler = new HttpClientHandler
             {
                 ClientCertificateOptions = ClientCertificateOption.Manual,
             };
-            certHandler.ClientCertificates.Add(options.CertificateSource.GetCertificate());
+            certHandler.ClientCertificates.Add(certificateSource.GetCertificate());
 
             var rateLimiter = new RateLimitingHandler(RequestsPerSecond)
             {
@@ -83,20 +89,20 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return new HttpClient(rateLimiter);
         }
 
-        private static OAuthTokenProvider BuildTokenProvider(SicoobApiOptions options)
+        private static OAuthTokenProvider BuildTokenProvider(string clientId, string clientSecret, CertificateSource certificateSource, Uri tokenEndpoint)
         {
             var certHandler = new HttpClientHandler
             {
                 ClientCertificateOptions = ClientCertificateOption.Manual,
             };
-            certHandler.ClientCertificates.Add(options.CertificateSource.GetCertificate());
+            certHandler.ClientCertificates.Add(certificateSource.GetCertificate());
 
             var tokenHttpClient = new HttpClient(certHandler);
             var tokenOptions = new OAuthTokenProviderOptions
             {
-                TokenEndpoint = options.TokenEndpoint,
-                ClientId = options.ClientId,
-                ClientSecret = options.ClientSecret,
+                TokenEndpoint = tokenEndpoint,
+                ClientId = clientId,
+                ClientSecret = clientSecret,
                 Scopes = Scopes,
             };
 
