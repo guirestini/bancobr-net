@@ -37,5 +37,8 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
 
         [JsonProperty("nsu")]
         public long? Nsu { get; set; }
+
+        [JsonProperty("transacao")]
+        public long Transacao { get; set; }
     }
 }

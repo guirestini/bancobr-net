@@ -19,7 +19,8 @@ string? certPassword = Environment.GetEnvironmentVariable("SICOOB_CERT_PASSWORD"
 string? numeroAgenciaText = Environment.GetEnvironmentVariable("SICOOB_NUMERO_COOPERATIVA");
 string? numeroContaText = Environment.GetEnvironmentVariable("SICOOB_NUMERO_CONTA");
 string? codigoBarras = Environment.GetEnvironmentVariable("SICOOB_CODIGO_BARRAS");
-string idLancamento = Environment.GetEnvironmentVariable("SICOOB_ID_LANCAMENTO") ?? $"SANDBOX-{DateTime.UtcNow:yyyyMMddHHmmss}";
+string? idLancamentoText = Environment.GetEnvironmentVariable("SICOOB_ID_LANCAMENTO");
+Guid idLancamento = string.IsNullOrWhiteSpace(idLancamentoText) ? Guid.NewGuid() : Guid.Parse(idLancamentoText);
 bool confirmarPagamento = Environment.GetEnvironmentVariable("SICOOB_CONFIRMAR_PAGAMENTO") == "true";
 
 // O Sicoob expõe, no portal de sandbox, um "Access token (Bearer)" já emitido para teste
@@ -48,7 +49,7 @@ if (faltando.Count > 0)
     Console.WriteLine("Opcional: SICOOB_ACCESS_TOKEN para usar um token Bearer já emitido pelo portal de sandbox, pulando o fluxo OAuth2.");
     Console.WriteLine("Opcional: SICOOB_TOKEN_ENDPOINT para sobrescrever o endpoint de token padrão do Sicoob.");
     Console.WriteLine("Opcional: SICOOB_CONFIRMAR_PAGAMENTO=true para também testar PagarBoletoAsync (cuidado: dispara um pagamento real, mesmo em sandbox).");
-    Console.WriteLine("Opcional: SICOOB_ID_LANCAMENTO para fixar o lançamento usado na idempotency key (default: timestamp gerado a cada execução).");
+    Console.WriteLine("Opcional: SICOOB_ID_LANCAMENTO (UUID) para fixar o lançamento usado na idempotency key (default: UUID gerado a cada execução).");
     return 1;
 }
 
@@ -96,7 +97,7 @@ try
     Console.WriteLine();
     Console.WriteLine("SICOOB_CONFIRMAR_PAGAMENTO=true: chamando PagarBoletoAsync...");
 
-    var request = new BoletoPagamentoRequest
+    var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest
     {
         IdentificadorConsulta = consulta.IdentificadorConsulta,
         ValorBoleto = consulta.ValorBoleto,
@@ -107,7 +108,7 @@ try
         AceitaValorDivergente = false,
         NumeroCpfCnpjPortador = consulta.NumeroCpfCnpjPagador,
         NomePortador = consulta.NomeRazaoSocialPagador,
-        DebtorAccount = new DebtorAccount
+        DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount
         {
             Issuer = numeroAgencia,
             Number = numeroConta,
@@ -116,7 +117,7 @@ try
         },
     };
 
-    var idempotencyKey = IdempotencyKey.New(idLancamento);
+    var idempotencyKey = IdempotencyKey.New(numeroAgencia, numeroConta, idLancamento);
     var resultado = await client.PagarBoletoAsync(codigoBarras!, request, idempotencyKey);
 
     if (resultado.PendenteAssinatura)

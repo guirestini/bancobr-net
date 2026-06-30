@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
+using BancoBr.API.Base.Models;
 
 namespace BancoBr.API.Base
 {
@@ -31,14 +31,14 @@ namespace BancoBr.API.Base
         /// IdentificadorConsulta retornado) e a envia. Quando o ERP precisa exibir o valor para
         /// confirmação antes de pagar, use ConsultarBoletoAsync e PagarBoletoAsync separadamente.
         /// </summary>
-        public abstract Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroAgencia, string idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default);
+        public abstract Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroAgencia, Guid idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Paga vários boletos em sequência (o Sicoob não tem endpoint de lote — cada item ainda
         /// gera uma consulta + um pagamento como chamadas HTTP separadas, throttladas pelo rate
         /// limit já configurado no cliente). Um item com erro não interrompe os demais.
         /// </summary>
-        public abstract Task<IReadOnlyList<PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<PagamentoBoletoLoteItem> itens, CancellationToken cancellationToken = default);
+        public abstract Task<IReadOnlyList<global::BancoBr.API.Sicoob.Pagamentos.Boletos.Models.PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<global::BancoBr.API.Sicoob.Pagamentos.Boletos.Models.PagamentoBoletoLoteItem> itens, CancellationToken cancellationToken = default);
 
         public abstract Task<ComprovantePagamento> ConsultarComprovantePorIdAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default);
 
@@ -46,6 +46,6 @@ namespace BancoBr.API.Base
 
         public abstract Task<ComprovantePagamento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default);
 
-        public abstract Task<IReadOnlyList<BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, SituacaoBoletoEnum situacao, TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default);
+        public abstract Task<IReadOnlyList<global::BancoBr.API.Sicoob.Pagamentos.Boletos.Models.BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, global::BancoBr.API.Sicoob.Pagamentos.Boletos.Models.SituacaoBoletoEnum situacao, global::BancoBr.API.Sicoob.Pagamentos.Boletos.Models.TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default);
     }
 }

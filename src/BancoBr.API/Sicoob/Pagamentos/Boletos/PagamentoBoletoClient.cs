@@ -109,7 +109,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return new OAuthTokenProvider(tokenHttpClient, tokenOptions);
         }
 
-        public override async Task<BoletoConsultaResponse> ConsultarBoletoAsync(string codigoBarras, long numeroConta, DateTime? dataPagamento = null, CancellationToken cancellationToken = default)
+        public override async Task<BancoBr.API.Base.Models.BoletoConsultaResponse> ConsultarBoletoAsync(string codigoBarras, long numeroConta, DateTime? dataPagamento = null, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/{codigoBarras}?numeroConta={numeroConta}";
             if (dataPagamento.HasValue)
@@ -117,24 +117,26 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 url += $"&dataPagamento={dataPagamento.Value:yyyy-MM-dd}";
             }
 
-            return await SendAsync<BoletoConsultaResponse>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
+            var resposta = await SendAsync<BoletoConsultaResponse>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
                 .ConfigureAwait(false);
+
+            return MapToAgnostic(resposta);
         }
 
-        public override async Task<PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroAgencia, string idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default)
+        public override async Task<BancoBr.API.Base.Models.PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroAgencia, Guid idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default)
         {
             var consulta = await ConsultarBoletoAsync(codigoBarras, numeroConta, dataPagamento, cancellationToken).ConfigureAwait(false);
             if (consulta == null)
             {
-                return PagamentoBoletoResultado.NaoEncontrado();
+                return BancoBr.API.Base.Models.PagamentoBoletoResultado.NaoEncontrado();
             }
 
             if (consulta.BloquearPagamento)
             {
-                return PagamentoBoletoResultado.Bloqueado(consulta.MensagemBloqueioPagamento);
+                return BancoBr.API.Base.Models.PagamentoBoletoResultado.Bloqueado(consulta.MensagemBloqueioPagamento);
             }
 
-            var request = new BoletoPagamentoRequest
+            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest
             {
                 IdentificadorConsulta = consulta.IdentificadorConsulta,
                 ValorBoleto = consulta.ValorBoleto,
@@ -146,7 +148,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 NomePortador = nomePortador,
                 Amount = consulta.ValorPagamento,
                 Date = dataPagamento ?? consulta.DataPagamento,
-                DebtorAccount = new DebtorAccount
+                DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount
                 {
                     Issuer = numeroAgencia,
                     Number = numeroConta,
@@ -155,7 +157,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 },
             };
 
-            var idempotencyKey = IdempotencyKey.New(idLancamento);
+            var idempotencyKey = IdempotencyKey.New(numeroAgencia, numeroConta, idLancamento);
             return await PagarBoletoAsync(codigoBarras, request, idempotencyKey, cancellationToken).ConfigureAwait(false);
         }
 
@@ -195,36 +197,37 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return resultados;
         }
 
-        public override async Task<PagamentoBoletoResultado> PagarBoletoAsync(string codigoBarras, BoletoPagamentoRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        public override async Task<BancoBr.API.Base.Models.PagamentoBoletoResultado> PagarBoletoAsync(string codigoBarras, BancoBr.API.Base.Models.BoletoPagamentoRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/{codigoBarras}";
-            var json = JsonConvert.SerializeObject(request, SerializerSettings);
+            var json = JsonConvert.SerializeObject(MapToSicoob(request), SerializerSettings);
 
             using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Post, url, json, idempotencyKey), cancellationToken).ConfigureAwait(false))
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.Accepted)
                 {
-                    return PagamentoBoletoResultado.PendenteDeAssinatura();
+                    return BancoBr.API.Base.Models.PagamentoBoletoResultado.PendenteDeAssinatura();
                 }
 
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                 {
-                    return PagamentoBoletoResultado.SemConteudo();
+                    return BancoBr.API.Base.Models.PagamentoBoletoResultado.SemConteudo();
                 }
 
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var envelope = JsonConvert.DeserializeObject<ResultadoEnvelope<ComprovantePagamento>>(body, SerializerSettings);
-                return PagamentoBoletoResultado.Efetivado(envelope.Resultado);
+                return BancoBr.API.Base.Models.PagamentoBoletoResultado.Efetivado(MapToAgnostic(envelope.Resultado));
             }
         }
 
-        public override async Task<ComprovantePagamento> ConsultarComprovantePorIdAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
+        public override async Task<BancoBr.API.Base.Models.ComprovantePagamento> ConsultarComprovantePorIdAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/{idPagamento}/comprovantes?numeroConta={numeroConta}";
-            return await SendAsync<ComprovantePagamento>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
+            var resultado = await SendAsync<ComprovantePagamento>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
                 .ConfigureAwait(false);
+            return MapToAgnostic(resultado);
         }
 
         public override async Task CancelarAgendamentoAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
@@ -238,11 +241,110 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             }
         }
 
-        public override async Task<ComprovantePagamento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default)
+        public override async Task<BancoBr.API.Base.Models.ComprovantePagamento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/{idempotencyKey}/idempotency/comprovantes";
-            return await SendAsync<ComprovantePagamento>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
+            var resultado = await SendAsync<ComprovantePagamento>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
                 .ConfigureAwait(false);
+            return MapToAgnostic(resultado);
+        }
+
+        private static BancoBr.API.Base.Models.BoletoConsultaResponse MapToAgnostic(BoletoConsultaResponse sicoob)
+        {
+            if (sicoob == null) return null;
+
+            return new BancoBr.API.Base.Models.BoletoConsultaResponse
+            {
+                NumeroInstituicaoEmissora = sicoob.NumeroInstituicaoEmissora,
+                NomeInstituicaoEmissora = sicoob.NomeInstituicaoEmissora,
+                TipoPessoaBeneficiario = sicoob.TipoPessoaBeneficiario,
+                NumeroCpfCnpjBeneficiario = sicoob.NumeroCpfCnpjBeneficiario,
+                NomeRazaoSocialBeneficiario = sicoob.NomeRazaoSocialBeneficiario,
+                NomeFantasiaBeneficiario = sicoob.NomeFantasiaBeneficiario,
+                TipoPessoaPagador = sicoob.TipoPessoaPagador,
+                NumeroCpfCnpjPagador = sicoob.NumeroCpfCnpjPagador,
+                NomeRazaoSocialPagador = sicoob.NomeRazaoSocialPagador,
+                CodigoBarras = sicoob.CodigoBarras,
+                NumeroLinhaDigitavel = sicoob.NumeroLinhaDigitavel,
+                DataVencimentoBoleto = sicoob.DataVencimentoBoleto,
+                DataLimitePagamentoBoleto = sicoob.DataLimitePagamentoBoleto,
+                ValorBoleto = sicoob.ValorBoleto,
+                ValorAbatimentoDesconto = sicoob.ValorAbatimentoDesconto,
+                ValorMultaMora = sicoob.ValorMultaMora,
+                ValorPagamento = sicoob.ValorPagamento,
+                DataPagamento = sicoob.DataPagamento,
+                PermiteAlterarValor = sicoob.PermiteAlterarValor,
+                ConsultaEmContingencia = sicoob.ConsultaEmContingencia,
+                CodigoEspecieDocumento = sicoob.CodigoEspecieDocumento,
+                CodigoSituacaoBoletoPagamento = sicoob.CodigoSituacaoBoletoPagamento,
+                NossoNumero = sicoob.NossoNumero,
+                NumeroDocumento = sicoob.NumeroDocumento,
+                IdentificadorConsulta = sicoob.IdentificadorConsulta,
+                DescricaoInstrucaoValorMinMax = sicoob.DescricaoInstrucaoValorMinMax,
+                BloquearPagamento = sicoob.BloquearPagamento,
+                MensagemBloqueioPagamento = sicoob.MensagemBloqueioPagamento,
+            };
+        }
+
+        private static BancoBr.API.Base.Models.ComprovantePagamento MapToAgnostic(ComprovantePagamento sicoob)
+        {
+            if (sicoob == null) return null;
+
+            return new BancoBr.API.Base.Models.ComprovantePagamento
+            {
+                NumeroAgencia = sicoob.NumeroAgencia,
+                NomeAgencia = sicoob.NomeAgencia,
+                NumeroConta = sicoob.NumeroConta,
+                NomeProprietarioContaCorrente = sicoob.NomeProprietarioContaCorrente,
+                NumeroLinhaDigitavel = sicoob.NumeroLinhaDigitavel,
+                NumeroInstituicaoEmissora = sicoob.NumeroInstituicaoEmissora,
+                NomeInstituicaoEmissora = sicoob.NomeInstituicaoEmissora,
+                NumeroCpfCnpjBeneficiario = sicoob.NumeroCpfCnpjBeneficiario,
+                NomeRazaoSocialBeneficiario = sicoob.NomeRazaoSocialBeneficiario,
+                NumeroCpfCnpjPagador = sicoob.NumeroCpfCnpjPagador,
+                NomeRazaoSocialPagador = sicoob.NomeRazaoSocialPagador,
+                DataVencimento = sicoob.DataVencimento,
+                ValorBoleto = sicoob.ValorBoleto,
+                ValorAbatimentoDesconto = sicoob.ValorAbatimentoDesconto,
+                ValorMultaMora = sicoob.ValorMultaMora,
+                ValorPagamento = sicoob.ValorPagamento,
+                DataPagamento = sicoob.DataPagamento,
+                SituacaoPagamento = sicoob.SituacaoPagamento,
+                DescricaoDetalheSituacao = sicoob.DescricaoDetalheSituacao,
+                DataHoraCadastro = sicoob.DataHoraCadastro,
+                AceitaValorDivergente = sicoob.AceitaValorDivergente,
+                NossoNumero = sicoob.NossoNumero,
+                NumeroDocumento = sicoob.NumeroDocumento,
+                DescricaoObservacao = sicoob.DescricaoObservacao,
+                DescricaoOuvidoria = sicoob.DescricaoOuvidoria,
+                DescricaoTituloComprovante = sicoob.DescricaoTituloComprovante,
+                IdPagamento = sicoob.IdPagamento,
+                NumeroAutenticacaoPagamento = sicoob.NumeroAutenticacaoPagamento,
+            };
+        }
+
+        private static BoletoPagamentoRequest MapToSicoob(BancoBr.API.Base.Models.BoletoPagamentoRequest agnostico)
+        {
+            return new BoletoPagamentoRequest
+            {
+                IdentificadorConsulta = agnostico.IdentificadorConsulta,
+                ValorBoleto = agnostico.ValorBoleto,
+                ValorDescontoAbatimento = agnostico.ValorDescontoAbatimento,
+                ValorMultaMora = agnostico.ValorMultaMora,
+                DescricaoObservacao = agnostico.DescricaoObservacao,
+                AceitaValorDivergente = agnostico.AceitaValorDivergente,
+                NumeroCpfCnpjPortador = agnostico.NumeroCpfCnpjPortador,
+                NomePortador = agnostico.NomePortador,
+                Amount = agnostico.Amount,
+                Date = agnostico.Date,
+                DebtorAccount = agnostico.DebtorAccount == null ? null : new DebtorAccount
+                {
+                    Issuer = agnostico.DebtorAccount.Issuer,
+                    Number = agnostico.DebtorAccount.Number,
+                    AccountType = agnostico.DebtorAccount.AccountType,
+                    PersonType = agnostico.DebtorAccount.PersonType,
+                },
+            };
         }
 
         public override async Task<System.Collections.Generic.IReadOnlyList<BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, SituacaoBoletoEnum situacao, TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)

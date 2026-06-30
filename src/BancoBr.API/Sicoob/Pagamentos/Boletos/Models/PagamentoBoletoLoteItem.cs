@@ -16,7 +16,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 
         public int NumeroAgencia { get; set; }
 
-        public string IdLancamento { get; set; }
+        public Guid IdLancamento { get; set; }
 
         public string NumeroCpfCnpjPortador { get; set; }
 

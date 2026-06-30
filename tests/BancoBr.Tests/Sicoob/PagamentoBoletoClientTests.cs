@@ -89,7 +89,7 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
-            var request = new BoletoPagamentoRequest
+            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest
             {
                 IdentificadorConsulta = "hash-123",
                 ValorBoleto = 100.36m,
@@ -98,10 +98,10 @@ namespace BancoBr.Tests.Sicoob
                 NumeroCpfCnpjPortador = "12345678900",
                 NomePortador = "Rosa Maria da Silva",
                 AceitaValorDivergente = true,
-                DebtorAccount = new DebtorAccount { Issuer = 1234, Number = 1234569, AccountType = 0, PersonType = 0 },
+                DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount { Issuer = 1234, Number = 1234569, AccountType = 0, PersonType = 0 },
             };
 
-            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New("lancamento-1"));
+            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569, Guid.NewGuid()));
 
             Assert.False(resultado.PendenteAssinatura);
             Assert.NotNull(resultado.Comprovante);
@@ -116,9 +116,9 @@ namespace BancoBr.Tests.Sicoob
         {
             var handler = new FakeHttpMessageHandler(HttpStatusCode.Accepted);
             var client = CriarClient(handler);
-            var request = new BoletoPagamentoRequest { DebtorAccount = new DebtorAccount() };
+            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest { DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount() };
 
-            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New("lancamento-1"));
+            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569, Guid.NewGuid()));
 
             Assert.True(resultado.PendenteAssinatura);
             Assert.Null(resultado.Comprovante);
@@ -133,10 +133,10 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, json);
             var client = CriarClient(handler);
-            var request = new BoletoPagamentoRequest { DebtorAccount = new DebtorAccount() };
+            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest { DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount() };
 
             var ex = await Assert.ThrowsAsync<SicoobApiException>(() =>
-                client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New("lancamento-1")));
+                client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569, Guid.NewGuid())));
 
             Assert.Equal(400, ex.HttpStatusCode);
             Assert.Equal("10013", ex.Mensagens.Single().Codigo);
@@ -181,28 +181,36 @@ namespace BancoBr.Tests.Sicoob
         }
 
         [Fact]
-        public void IdempotencyKey_New_CombinaIdLancamentoComAcao()
+        public void IdempotencyKey_New_CombinaCooperativaContaEIdLancamento()
         {
-            Assert.Equal("lancamento-42-INCLUSAO", IdempotencyKey.New("lancamento-42"));
-            Assert.Equal("lancamento-42-CANCELAMENTO", IdempotencyKey.New("lancamento-42", "CANCELAMENTO"));
+            var idLancamento = Guid.Parse("89c3e9fd-1a37-40be-a85b-69af118d336a");
+
+            Assert.Equal("12341234569" + idLancamento.ToString("D"), IdempotencyKey.New(1234, 1234569, idLancamento));
         }
 
         [Fact]
-        public void IdempotencyKey_New_MesmoLancamentoMesmaAcaoGeraMesmaKey()
+        public void IdempotencyKey_New_MesmoLancamentoGeraMesmaKey()
         {
-            var key1 = IdempotencyKey.New("lancamento-42");
-            var key2 = IdempotencyKey.New("lancamento-42");
+            var idLancamento = Guid.NewGuid();
+
+            var key1 = IdempotencyKey.New(1234, 1234569, idLancamento);
+            var key2 = IdempotencyKey.New(1234, 1234569, idLancamento);
 
             Assert.Equal(key1, key2);
         }
 
-        [Theory]
-        [InlineData(null)]
-        [InlineData("")]
-        [InlineData("   ")]
-        public void IdempotencyKey_New_SemIdLancamento_LancaArgumentException(string? idLancamento)
+        [Fact]
+        public void IdempotencyKey_New_IdLancamentoVazio_LancaArgumentException()
         {
-            Assert.Throws<ArgumentException>(() => IdempotencyKey.New(idLancamento!));
+            Assert.Throws<ArgumentException>(() => IdempotencyKey.New(1234, 1234569, Guid.Empty));
+        }
+
+        [Theory]
+        [InlineData(99999, 1234569)]
+        [InlineData(1234, 999999999999999)]
+        public void IdempotencyKey_New_CooperativaOuContaExcedeDigitos_LancaArgumentException(int numeroCooperativa, long numeroContaCorrente)
+        {
+            Assert.Throws<ArgumentException>(() => IdempotencyKey.New(numeroCooperativa, numeroContaCorrente, Guid.NewGuid()));
         }
 
         private const string ConsultaJsonNaoBloqueado = @"
@@ -253,7 +261,7 @@ namespace BancoBr.Tests.Sicoob
                 "00000000000000000000000000000000000000000000",
                 numeroConta: 1234569,
                 numeroAgencia: 4342,
-                idLancamento: "lancamento-1",
+                idLancamento: Guid.NewGuid(),
                 numeroCpfCnpjPortador: "12345678900",
                 nomePortador: "Rosa Maria da Silva");
 
@@ -276,7 +284,7 @@ namespace BancoBr.Tests.Sicoob
                 "00000000000000000000000000000000000000000000",
                 numeroConta: 1234569,
                 numeroAgencia: 4342,
-                idLancamento: "lancamento-1",
+                idLancamento: Guid.NewGuid(),
                 numeroCpfCnpjPortador: "12345678900",
                 nomePortador: "Rosa Maria da Silva");
 
@@ -295,7 +303,7 @@ namespace BancoBr.Tests.Sicoob
                 "00000000000000000000000000000000000000000000",
                 numeroConta: 1234569,
                 numeroAgencia: 4342,
-                idLancamento: "lancamento-1",
+                idLancamento: Guid.NewGuid(),
                 numeroCpfCnpjPortador: "12345678900",
                 nomePortador: "Rosa Maria da Silva");
 
@@ -336,9 +344,9 @@ namespace BancoBr.Tests.Sicoob
             var client = CriarClient(handler);
             var itens = new[]
             {
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-1", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = "lancamento-1", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 1" },
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-2", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = "lancamento-2", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 2" },
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-3", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = "lancamento-3", NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 3" },
+                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-1", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 1" },
+                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-2", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 2" },
+                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-3", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 3" },
             };
 
             var resultados = await client.PagarLoteBoletosAsync(itens);
