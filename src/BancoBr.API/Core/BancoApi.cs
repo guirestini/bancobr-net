@@ -5,6 +5,7 @@ using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
 using BancoBr.API.Sicoob.Pagamentos.Convenios;
+using BancoBr.API.Sicoob.Pagamentos.Pix;
 using BancoBr.Common.Enums;
 
 namespace BancoBr.API.Core
@@ -32,7 +33,9 @@ namespace BancoBr.API.Core
                 (clientId, clientSecret, certificateSource, tokenEndpoint) => new PagamentoConvenioClient(clientId, clientSecret, certificateSource, tokenEndpoint),
                 (clientId, certificateSource, tokenProvider) => new PagamentoConvenioClient(clientId, certificateSource, tokenProvider));
 
-            // próxima operação (ex.: Pix) entra aqui com mais uma chamada a Registrar, sem switch novo.
+            Registrar<PagamentoPixApiBase>(BancoEnum.Sicoob,
+                (clientId, clientSecret, certificateSource, tokenEndpoint) => new PagamentoPixClient(clientId, clientSecret, certificateSource, tokenEndpoint),
+                (clientId, certificateSource, tokenProvider) => new PagamentoPixClient(clientId, certificateSource, tokenProvider));
         }
 
         private static void Registrar<TApiBase>(BancoEnum banco, Func<string, string, CertificateSource, Uri, TApiBase> comClientSecret, Func<string, CertificateSource, IAccessTokenProvider, TApiBase> comTokenProvider)

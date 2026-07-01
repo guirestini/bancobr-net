@@ -1,4 +1,4 @@
-namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
+namespace BancoBr.API.Base.Models
 {
     public enum SituacaoBoletoEnum
     {

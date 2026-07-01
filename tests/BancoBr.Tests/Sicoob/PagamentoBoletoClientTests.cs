@@ -1,4 +1,5 @@
 using System.Net;
+using BancoBr.API.Base.Models;
 using BancoBr.API.Core.Models;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
@@ -98,7 +99,7 @@ namespace BancoBr.Tests.Sicoob
                 NumeroCpfCnpjPortador = "12345678900",
                 NomePortador = "Rosa Maria da Silva",
                 AceitaValorDivergente = true,
-                DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount { Issuer = 1234, Number = 1234569, AccountType = 0, PersonType = 0 },
+                DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount { Issuer = 1234, Number = 1234569, AccountType = 0, PersonType = 1 },
             };
 
             var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569, Guid.NewGuid()));
@@ -107,6 +108,7 @@ namespace BancoBr.Tests.Sicoob
             Assert.NotNull(resultado.Comprovante);
             Assert.Equal(1983450, resultado.Comprovante.IdPagamento);
             Assert.Equal("Efetivado", resultado.Comprovante.SituacaoPagamento);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.Comprovante.BancoBrSituacao);
             Assert.Contains("\"identificadorConsulta\":\"hash-123\"", handler.LastRequestBody);
             Assert.Contains("2019-10-20", handler.LastRequestBody);
         }
@@ -143,6 +145,80 @@ namespace BancoBr.Tests.Sicoob
         }
 
         [Fact]
+        public async Task PagarBoletoAsync_400ComCodigo10272_RecuperaComprovantePorIdempotency()
+        {
+            const string erroJson = @"
+                {
+                  ""mensagens"": [ { ""mensagem"": ""O idempotency já foi utilizado com sucesso em outra execução."", ""codigo"": ""10272"" } ]
+                }";
+
+            var handler = new SequencedFakeHttpMessageHandler(
+                (HttpStatusCode.BadRequest, erroJson),
+                (HttpStatusCode.OK, ComprovanteJson));
+            var client = CriarClient(handler);
+            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest { DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount() };
+            var idempotencyKey = IdempotencyKey.New(1234, 1234569, Guid.NewGuid());
+
+            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, idempotencyKey);
+
+            Assert.Equal(2, handler.Requests.Count);
+            Assert.Contains(idempotencyKey, handler.Requests[1].RequestUri!.ToString());
+            Assert.False(resultado.PendenteAssinatura);
+            Assert.NotNull(resultado.Comprovante);
+            Assert.Equal(1983450, resultado.Comprovante.IdPagamento);
+            Assert.Equal("Efetivado", resultado.Comprovante.SituacaoPagamento);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.Comprovante.BancoBrSituacao);
+        }
+
+        [Fact]
+        public async Task ConsultarComprovantePorIdAsync_200_RetornaBancoBrSituacaoEfetivado()
+        {
+            var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, ComprovanteJson);
+            var client = CriarClient(handler);
+
+            var resultado = await client.ConsultarComprovantePorIdAsync(1983450, 1234569);
+
+            Assert.Equal("Efetivado", resultado.SituacaoPagamento);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.BancoBrSituacao);
+        }
+
+        [Fact]
+        public async Task ConsultarComprovantePorIdAsync_SituacaoNaoReconhecida_RetornaNaoIntegrado()
+        {
+            const string json = @"
+            {
+              ""resultado"": {
+                ""idPagamento"": 1983450,
+                ""situacaoPagamento"": ""XYZ""
+              }
+            }";
+            var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
+            var client = CriarClient(handler);
+
+            var resultado = await client.ConsultarComprovantePorIdAsync(1983450, 1234569);
+
+            Assert.Equal(BancoBrSituacaoEnum.NaoIntegrado, resultado.BancoBrSituacao);
+        }
+
+        [Fact]
+        public async Task ConsultarComprovantePorIdAsync_SituacaoRejeitado_RetornaRejeitado()
+        {
+            const string json = @"
+            {
+              ""resultado"": {
+                ""idPagamento"": 1983450,
+                ""situacaoPagamento"": ""Rejeitado""
+              }
+            }";
+            var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
+            var client = CriarClient(handler);
+
+            var resultado = await client.ConsultarComprovantePorIdAsync(1983450, 1234569);
+
+            Assert.Equal(BancoBrSituacaoEnum.Rejeitado, resultado.BancoBrSituacao);
+        }
+
+        [Fact]
         public async Task CancelarAgendamentoAsync_204_NaoLancaExcecao()
         {
             var handler = new FakeHttpMessageHandler(HttpStatusCode.NoContent);
@@ -173,8 +249,8 @@ namespace BancoBr.Tests.Sicoob
                 1234569,
                 new DateTime(2026, 6, 1),
                 new DateTime(2026, 6, 30),
-                SituacaoBoletoEnum.EmAberto,
-                TipoDataConsultaEnum.Vencimento);
+                BancoBr.API.Base.Models.SituacaoBoletoEnum.EmAberto,
+                BancoBr.API.Base.Models.TipoDataConsultaEnum.Vencimento);
 
             Assert.Single(resultado);
             Assert.Equal(1, resultado[0].CodigoTipoSituacaoBoleto);
@@ -185,7 +261,7 @@ namespace BancoBr.Tests.Sicoob
         {
             var idLancamento = Guid.Parse("89c3e9fd-1a37-40be-a85b-69af118d336a");
 
-            Assert.Equal("12341234569" + idLancamento.ToString("D"), IdempotencyKey.New(1234, 1234569, idLancamento));
+            Assert.Equal("1234-1234569-" + idLancamento.ToString("D"), IdempotencyKey.New(1234, 1234569, idLancamento));
         }
 
         [Fact]
@@ -344,9 +420,9 @@ namespace BancoBr.Tests.Sicoob
             var client = CriarClient(handler);
             var itens = new[]
             {
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-1", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 1" },
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-2", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 2" },
-                new PagamentoBoletoLoteItem { CodigoBarras = "boleto-3", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 3" },
+                new BancoBr.API.Base.Models.PagamentoBoletoLoteItem { CodigoBarras = "boleto-1", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 1" },
+                new BancoBr.API.Base.Models.PagamentoBoletoLoteItem { CodigoBarras = "boleto-2", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 2" },
+                new BancoBr.API.Base.Models.PagamentoBoletoLoteItem { CodigoBarras = "boleto-3", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 3" },
             };
 
             var resultados = await client.PagarLoteBoletosAsync(itens);

@@ -1,7 +1,7 @@
 using System.Net;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Convenios;
-using BancoBr.API.Sicoob.Pagamentos.Convenios.Models;
+using BancoBr.API.Base.Models;
 using Xunit;
 
 namespace BancoBr.Tests.Sicoob
@@ -138,6 +138,73 @@ namespace BancoBr.Tests.Sicoob
         }
 
         [Fact]
+        public async Task PagarConvenioAsync_400ComCodigo10272_RecuperaPagamentoJaEfetivado()
+        {
+            const string erroJson = @"
+                {
+                  ""mensagens"": [ { ""mensagem"": ""O idempotency já foi utilizado com sucesso em outra execução."", ""codigo"": ""10272"" } ]
+                }";
+            const string pagamentosJson = @"
+                {
+                  ""resultado"": [
+                    {
+                      ""valorPago"": 1171.23,
+                      ""nsu"": 183390172928,
+                      ""dataPagamento"": ""2026-06-29"",
+                      ""valorDocumento"": 1171.23,
+                      ""autenticacao"": ""71205202-2DBB-46C7-BA31-0DFB8DC64EBE"",
+                      ""transacao"": 123456789
+                    }
+                  ]
+                }";
+
+            var handler = new SequencedFakeHttpMessageHandler(
+                (HttpStatusCode.BadRequest, erroJson),
+                (HttpStatusCode.OK, pagamentosJson));
+            var client = CriarClient(handler);
+            var request = new ArrecadacaoPagamentoRequest
+            {
+                Identificacao = new Identificacao { Instituicao = 1234, Unidade = 0 },
+                Pagamento = new PagamentoConvenio { DataPagamento = new DateTime(2026, 6, 29) },
+                Transacao = 123456789,
+            };
+
+            var resultado = await client.PagarConvenioAsync("00000000000000000000000000000000000000000000", request);
+
+            Assert.Equal(2, handler.Requests.Count);
+            Assert.False(resultado.PendenteAssinatura);
+            Assert.NotNull(resultado.Resultado);
+            Assert.Null(resultado.Resultado.Comprovante);
+            Assert.Equal("71205202-2DBB-46C7-BA31-0DFB8DC64EBE", resultado.Resultado.Arrecadacao.Autenticacao);
+        }
+
+        [Fact]
+        public async Task PagarConvenioAsync_400ComCodigo10272SemPagamentoCorrespondente_LancaSicoobApiException()
+        {
+            const string erroJson = @"
+                {
+                  ""mensagens"": [ { ""mensagem"": ""O idempotency já foi utilizado com sucesso em outra execução."", ""codigo"": ""10272"" } ]
+                }";
+            const string pagamentosJson = @"{ ""resultado"": [] }";
+
+            var handler = new SequencedFakeHttpMessageHandler(
+                (HttpStatusCode.BadRequest, erroJson),
+                (HttpStatusCode.OK, pagamentosJson));
+            var client = CriarClient(handler);
+            var request = new ArrecadacaoPagamentoRequest
+            {
+                Identificacao = new Identificacao { Instituicao = 1234, Unidade = 0 },
+                Pagamento = new PagamentoConvenio { DataPagamento = new DateTime(2026, 6, 29) },
+                Transacao = 123456789,
+            };
+
+            var ex = await Assert.ThrowsAsync<SicoobApiException>(() =>
+                client.PagarConvenioAsync("00000000000000000000000000000000000000000000", request));
+
+            Assert.Equal("10272", ex.Mensagens.Single().Codigo);
+        }
+
+        [Fact]
         public async Task ConsultarPagamentosAsync_200_MapeiaSituacaoEListaDeItens()
         {
             var json = @"
@@ -162,6 +229,59 @@ namespace BancoBr.Tests.Sicoob
 
             Assert.Single(resultado);
             Assert.Equal("Recebido", resultado[0].Situacao.Descricao);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado[0].BancoBrSituacao);
+        }
+
+        [Fact]
+        public async Task ConsultarPagamentosAsync_SituacaoNaoReconhecida_RetornaNaoIntegrado()
+        {
+            var json = @"
+            {
+              ""resultado"": [
+                {
+                  ""valorPago"": 1171.23,
+                  ""nsu"": 183390172928,
+                  ""dataPagamento"": ""2026-06-29"",
+                  ""valorDocumento"": 1171.23,
+                  ""situacao"": { ""codigo"": 99, ""descricao"": ""Outro"" },
+                  ""convenio"": ""string"",
+                  ""siglaConvenio"": ""string"",
+                  ""transacao"": 1234569789
+                }
+              ]
+            }";
+            var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
+            var client = CriarClient(handler);
+
+            var resultado = await client.ConsultarPagamentosAsync("00000000000000000000000000000000000000000000", 1234, new DateTime(2026, 6, 29));
+
+            Assert.Equal(BancoBrSituacaoEnum.NaoIntegrado, resultado[0].BancoBrSituacao);
+        }
+
+        [Fact]
+        public async Task ConsultarPagamentosAsync_SituacaoRejeitado_RetornaRejeitado()
+        {
+            var json = @"
+            {
+              ""resultado"": [
+                {
+                  ""valorPago"": 1171.23,
+                  ""nsu"": 183390172928,
+                  ""dataPagamento"": ""2026-06-29"",
+                  ""valorDocumento"": 1171.23,
+                  ""situacao"": { ""codigo"": 2, ""descricao"": ""Rejeitado"" },
+                  ""convenio"": ""string"",
+                  ""siglaConvenio"": ""string"",
+                  ""transacao"": 1234569789
+                }
+              ]
+            }";
+            var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
+            var client = CriarClient(handler);
+
+            var resultado = await client.ConsultarPagamentosAsync("00000000000000000000000000000000000000000000", 1234, new DateTime(2026, 6, 29));
+
+            Assert.Equal(BancoBrSituacaoEnum.Rejeitado, resultado[0].BancoBrSituacao);
         }
 
         [Fact]

@@ -1,3 +1,5 @@
+using Newtonsoft.Json;
+
 namespace BancoBr.API.Base.Models
 {
     /// <summary>
@@ -19,28 +21,32 @@ namespace BancoBr.API.Base.Models
 
         public ComprovantePagamento Comprovante { get; }
 
-        private PagamentoBoletoResultado(bool pendenteAssinatura, bool boletoNaoEncontrado, bool pagamentoBloqueado, string mensagemBloqueio, ComprovantePagamento comprovante)
+        [JsonProperty("BancoBrSituacao")]
+        public BancoBrSituacaoEnum BancoBrSituacao { get; }
+
+        private PagamentoBoletoResultado(bool pendenteAssinatura, bool boletoNaoEncontrado, bool pagamentoBloqueado, string mensagemBloqueio, ComprovantePagamento comprovante, BancoBrSituacaoEnum bancoBrSituacao)
         {
             PendenteAssinatura = pendenteAssinatura;
             BoletoNaoEncontrado = boletoNaoEncontrado;
             PagamentoBloqueado = pagamentoBloqueado;
             MensagemBloqueio = mensagemBloqueio;
             Comprovante = comprovante;
+            BancoBrSituacao = bancoBrSituacao;
         }
 
         public static PagamentoBoletoResultado Efetivado(ComprovantePagamento comprovante) =>
-            new PagamentoBoletoResultado(pendenteAssinatura: false, boletoNaoEncontrado: false, pagamentoBloqueado: false, mensagemBloqueio: null, comprovante);
+            new PagamentoBoletoResultado(pendenteAssinatura: false, boletoNaoEncontrado: false, pagamentoBloqueado: false, mensagemBloqueio: null, comprovante, BancoBrSituacaoEnum.Efetivado);
 
         public static PagamentoBoletoResultado PendenteDeAssinatura() =>
-            new PagamentoBoletoResultado(pendenteAssinatura: true, boletoNaoEncontrado: false, pagamentoBloqueado: false, mensagemBloqueio: null, comprovante: null);
+            new PagamentoBoletoResultado(pendenteAssinatura: true, boletoNaoEncontrado: false, pagamentoBloqueado: false, mensagemBloqueio: null, comprovante: null, BancoBrSituacaoEnum.Agendado);
 
         public static PagamentoBoletoResultado SemConteudo() =>
-            new PagamentoBoletoResultado(pendenteAssinatura: false, boletoNaoEncontrado: false, pagamentoBloqueado: false, mensagemBloqueio: null, comprovante: null);
+            new PagamentoBoletoResultado(pendenteAssinatura: false, boletoNaoEncontrado: false, pagamentoBloqueado: false, mensagemBloqueio: null, comprovante: null, BancoBrSituacaoEnum.Efetivado);
 
         public static PagamentoBoletoResultado NaoEncontrado() =>
-            new PagamentoBoletoResultado(pendenteAssinatura: false, boletoNaoEncontrado: true, pagamentoBloqueado: false, mensagemBloqueio: null, comprovante: null);
+            new PagamentoBoletoResultado(pendenteAssinatura: false, boletoNaoEncontrado: true, pagamentoBloqueado: false, mensagemBloqueio: null, comprovante: null, BancoBrSituacaoEnum.Cancelado);
 
         public static PagamentoBoletoResultado Bloqueado(string mensagemBloqueio) =>
-            new PagamentoBoletoResultado(pendenteAssinatura: false, boletoNaoEncontrado: false, pagamentoBloqueado: true, mensagemBloqueio, comprovante: null);
+            new PagamentoBoletoResultado(pendenteAssinatura: false, boletoNaoEncontrado: false, pagamentoBloqueado: true, mensagemBloqueio, comprovante: null, BancoBrSituacaoEnum.Cancelado);
     }
 }

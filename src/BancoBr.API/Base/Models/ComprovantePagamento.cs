@@ -1,4 +1,5 @@
 using System;
+using Newtonsoft.Json;
 
 namespace BancoBr.API.Base.Models
 {
@@ -62,5 +63,8 @@ namespace BancoBr.API.Base.Models
         public long IdPagamento { get; set; }
 
         public string NumeroAutenticacaoPagamento { get; set; }
+
+        [JsonProperty("BancoBrSituacao")]
+        public BancoBrSituacaoEnum BancoBrSituacao { get; set; }
     }
 }

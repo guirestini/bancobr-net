@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -10,6 +11,7 @@ using BancoBr.API.Core.Models;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
+using BancoBr.Common.Core;
 using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos
@@ -111,7 +113,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
 
         public override async Task<BancoBr.API.Base.Models.BoletoConsultaResponse> ConsultarBoletoAsync(string codigoBarras, long numeroConta, DateTime? dataPagamento = null, CancellationToken cancellationToken = default)
         {
-            var url = $"{_baseUrl}boletos/{codigoBarras}?numeroConta={numeroConta}";
+            var url = $"{_baseUrl}boletos/{codigoBarras.JustNumbers()}?numeroConta={numeroConta}";
             if (dataPagamento.HasValue)
             {
                 url += $"&dataPagamento={dataPagamento.Value:yyyy-MM-dd}";
@@ -123,7 +125,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return MapToAgnostic(resposta);
         }
 
-        public override async Task<BancoBr.API.Base.Models.PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroAgencia, Guid idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 0, CancellationToken cancellationToken = default)
+        public override async Task<BancoBr.API.Base.Models.PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroAgencia, Guid idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 1, CancellationToken cancellationToken = default)
         {
             var consulta = await ConsultarBoletoAsync(codigoBarras, numeroConta, dataPagamento, cancellationToken).ConfigureAwait(false);
             if (consulta == null)
@@ -161,9 +163,9 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return await PagarBoletoAsync(codigoBarras, request, idempotencyKey, cancellationToken).ConfigureAwait(false);
         }
 
-        public override async Task<IReadOnlyList<PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<PagamentoBoletoLoteItem> itens, CancellationToken cancellationToken = default)
+        public override async Task<IReadOnlyList<BancoBr.API.Base.Models.PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<BancoBr.API.Base.Models.PagamentoBoletoLoteItem> itens, CancellationToken cancellationToken = default)
         {
-            var resultados = new List<PagamentoBoletoLoteResultadoItem>();
+            var resultados = new List<BancoBr.API.Base.Models.PagamentoBoletoLoteResultadoItem>();
 
             foreach (var item in itens)
             {
@@ -182,7 +184,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                         item.PersonType,
                         cancellationToken).ConfigureAwait(false);
 
-                    resultados.Add(PagamentoBoletoLoteResultadoItem.ComSucesso(item, resultado));
+                    resultados.Add(BancoBr.API.Base.Models.PagamentoBoletoLoteResultadoItem.ComSucesso(item, resultado));
                 }
                 catch (OperationCanceledException)
                 {
@@ -190,7 +192,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 }
                 catch (Exception ex)
                 {
-                    resultados.Add(PagamentoBoletoLoteResultadoItem.ComFalha(item, ex));
+                    resultados.Add(BancoBr.API.Base.Models.PagamentoBoletoLoteResultadoItem.ComFalha(item, ex));
                 }
             }
 
@@ -199,7 +201,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
 
         public override async Task<BancoBr.API.Base.Models.PagamentoBoletoResultado> PagarBoletoAsync(string codigoBarras, BancoBr.API.Base.Models.BoletoPagamentoRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
         {
-            var url = $"{_baseUrl}boletos/pagamentos/{codigoBarras}";
+            var url = $"{_baseUrl}boletos/pagamentos/{codigoBarras.JustNumbers()}";
             var json = JsonConvert.SerializeObject(MapToSicoob(request), SerializerSettings);
 
             using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Post, url, json, idempotencyKey), cancellationToken).ConfigureAwait(false))
@@ -214,7 +216,15 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                     return BancoBr.API.Base.Models.PagamentoBoletoResultado.SemConteudo();
                 }
 
-                await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
+                try
+                {
+                    await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
+                }
+                catch (SicoobApiException ex) when (ex.Mensagens.Any(m => m.Codigo == SicoobErrorCodes.IdempotencyJaUtilizado))
+                {
+                    var comprovanteExistente = await ConsultarComprovantePorIdempotencyAsync(idempotencyKey, cancellationToken).ConfigureAwait(false);
+                    return BancoBr.API.Base.Models.PagamentoBoletoResultado.Efetivado(comprovanteExistente);
+                }
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var envelope = JsonConvert.DeserializeObject<ResultadoEnvelope<ComprovantePagamento>>(body, SerializerSettings);
@@ -310,6 +320,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 ValorPagamento = sicoob.ValorPagamento,
                 DataPagamento = sicoob.DataPagamento,
                 SituacaoPagamento = sicoob.SituacaoPagamento,
+                BancoBrSituacao = MapSituacaoPagamentoParaSituacao(sicoob.SituacaoPagamento),
                 DescricaoDetalheSituacao = sicoob.DescricaoDetalheSituacao,
                 DataHoraCadastro = sicoob.DataHoraCadastro,
                 AceitaValorDivergente = sicoob.AceitaValorDivergente,
@@ -323,6 +334,44 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             };
         }
 
+        /// <summary>
+        /// ATENÇÃO: mapeamento best-effort do campo textual "situacaoPagamento" retornado pela API
+        /// de Pagamento de Boletos do Sicoob para o enum agnóstico
+        /// <see cref="BancoBr.API.Base.Models.BancoBrSituacaoEnum"/>. O único valor confirmado em
+        /// testes/documentação disponível neste repositório é "Efetivado". Os demais valores abaixo
+        /// foram inferidos a partir do vocabulário plausível de status de pagamento de boleto e NÃO
+        /// estão confirmados — DEVEM SER VALIDADOS/AJUSTADOS contra respostas reais do
+        /// sandbox/produção do Sicoob antes de confiar neste mapeamento. Qualquer valor não
+        /// reconhecido cai em NaoIntegrado, para nunca reportar falsamente Efetivado/Cancelado.
+        /// </summary>
+        private static BancoBr.API.Base.Models.BancoBrSituacaoEnum MapSituacaoPagamentoParaSituacao(string situacaoPagamento)
+        {
+            switch (situacaoPagamento?.Trim().ToUpperInvariant())
+            {
+                case "EFETIVADO":
+                case "PAGO":
+                case "LIQUIDADO":
+                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Efetivado;
+
+                case "AGENDADO":
+                case "EM_PROCESSAMENTO":
+                case "PROCESSANDO":
+                case "PENDENTE":
+                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Agendado;
+
+                case "CANCELADO":
+                case "NAO_EFETIVADO":
+                case "DEVOLVIDO":
+                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Cancelado;
+
+                case "REJEITADO":
+                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Rejeitado;
+
+                default:
+                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.NaoIntegrado;
+            }
+        }
+
         private static BoletoPagamentoRequest MapToSicoob(BancoBr.API.Base.Models.BoletoPagamentoRequest agnostico)
         {
             return new BoletoPagamentoRequest
@@ -333,7 +382,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 ValorMultaMora = agnostico.ValorMultaMora,
                 DescricaoObservacao = agnostico.DescricaoObservacao,
                 AceitaValorDivergente = agnostico.AceitaValorDivergente,
-                NumeroCpfCnpjPortador = agnostico.NumeroCpfCnpjPortador,
+                NumeroCpfCnpjPortador = agnostico.NumeroCpfCnpjPortador?.Replace(".", "").Replace("-", "").Replace("/", ""),
                 NomePortador = agnostico.NomePortador,
                 Amount = agnostico.Amount,
                 Date = agnostico.Date,
@@ -347,7 +396,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             };
         }
 
-        public override async Task<System.Collections.Generic.IReadOnlyList<BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, SituacaoBoletoEnum situacao, TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)
+        public override async Task<System.Collections.Generic.IReadOnlyList<BancoBr.API.Base.Models.BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, BancoBr.API.Base.Models.SituacaoBoletoEnum situacao, BancoBr.API.Base.Models.TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos?numeroConta={numeroConta}&dataInicial={dataInicial:yyyy-MM-dd}&dataFinal={dataFinal:yyyy-MM-dd}&situacao={(int)situacao}&tipoData={(int)tipoData}";
 
@@ -355,15 +404,73 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                 {
-                    return Array.Empty<BoletoDDA>();
+                    return Array.Empty<BancoBr.API.Base.Models.BoletoDDA>();
                 }
 
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                return JsonConvert.DeserializeObject<BoletoDDA[]>(body, SerializerSettings);
+                var itens = JsonConvert.DeserializeObject<BoletoDDA[]>(body, SerializerSettings);
+                return itens?.Select(MapBoletoDda).ToList();
             }
         }
+
+        private static BancoBr.API.Base.Models.BoletoDDA MapBoletoDda(BoletoDDA dto) => new BancoBr.API.Base.Models.BoletoDDA
+        {
+            DescricaoTipoPagador = dto.DescricaoTipoPagador,
+            TipoPessoaBeneficiario = dto.TipoPessoaBeneficiario,
+            NumeroCpfCnpjBeneficiario = dto.NumeroCpfCnpjBeneficiario,
+            NomeRazaoSocialBeneficiario = dto.NomeRazaoSocialBeneficiario,
+            TipoPessoaPagador = dto.TipoPessoaPagador,
+            NumeroCpfCnpjPagador = dto.NumeroCpfCnpjPagador,
+            NomeRazaoSocialPagador = dto.NomeRazaoSocialPagador,
+            NomeFantasiaPagador = dto.NomeFantasiaPagador,
+            DescricaoLogradouroPagador = dto.DescricaoLogradouroPagador,
+            DescricaoCidadePagador = dto.DescricaoCidadePagador,
+            SiglaUfPagador = dto.SiglaUfPagador,
+            NumeroCepPagador = dto.NumeroCepPagador,
+            TipoPessoaAvalista = dto.TipoPessoaAvalista,
+            NumeroCpfCnpjAvalista = dto.NumeroCpfCnpjAvalista,
+            NomeAvalista = dto.NomeAvalista,
+            ValorBoleto = dto.ValorBoleto,
+            DataVencimentoBoleto = dto.DataVencimentoBoleto,
+            CodigoTipoSituacaoBoleto = dto.CodigoTipoSituacaoBoleto,
+            DescricaoSituacaoBoleto = dto.DescricaoSituacaoBoleto,
+            NumeroIdentificadorBoletoCip = dto.NumeroIdentificadorBoletoCip,
+            NumeroCodigoBarras = dto.NumeroCodigoBarras,
+            NumeroCpfCnpjPagadorEletronico = dto.NumeroCpfCnpjPagadorEletronico,
+            Aceite = dto.Aceite,
+            NumeroNossoNumero = dto.NumeroNossoNumero,
+            NumeroDocumento = dto.NumeroDocumento,
+            DataPagamento = dto.DataPagamento,
+            ValorPagamento = dto.ValorPagamento,
+            CodigoEspecieDocumento = dto.CodigoEspecieDocumento,
+            DataEmissao = dto.DataEmissao,
+            DataLimitePagamento = dto.DataLimitePagamento,
+            CodigoTipoJuros = dto.CodigoTipoJuros,
+            DataJuros = dto.DataJuros,
+            ValorPercentualJuros = dto.ValorPercentualJuros,
+            CodigoTipoMulta = dto.CodigoTipoMulta,
+            DataMulta = dto.DataMulta,
+            ValorPercentualMulta = dto.ValorPercentualMulta,
+            ValorAbatimento = dto.ValorAbatimento,
+            CodigoTipoDesconto1 = dto.CodigoTipoDesconto1,
+            DataDesconto1 = dto.DataDesconto1,
+            ValorPercentualDesconto1 = dto.ValorPercentualDesconto1,
+            CodigoTipoDesconto2 = dto.CodigoTipoDesconto2,
+            DataDesconto2 = dto.DataDesconto2,
+            ValorPercentualDesconto2 = dto.ValorPercentualDesconto2,
+            CodigoTipoDesconto3 = dto.CodigoTipoDesconto3,
+            DataDesconto3 = dto.DataDesconto3,
+            ValorPercentualDesconto3 = dto.ValorPercentualDesconto3,
+            NumeroDiasProtesto = dto.NumeroDiasProtesto,
+            QuantidadePagamentoParcial = dto.QuantidadePagamentoParcial,
+            CodigoAutorizacaoValorDivergente = dto.CodigoAutorizacaoValorDivergente,
+            CodigoIndicadorValorMaximo = dto.CodigoIndicadorValorMaximo,
+            ValorPercentualMaximo = dto.ValorPercentualMaximo,
+            CodigoIndicadorValorMinimo = dto.CodigoIndicadorValorMinimo,
+            ValorPercentualMinimo = dto.ValorPercentualMinimo,
+        };
 
         private async Task<T> SendAsync<T>(HttpMethod method, string url, string body, string idempotencyKey, CancellationToken cancellationToken)
         {

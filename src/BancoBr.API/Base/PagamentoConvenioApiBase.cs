@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using BancoBr.API.Sicoob.Pagamentos.Convenios.Models;
+using BancoBr.API.Base.Models;
 
 namespace BancoBr.API.Base
 {

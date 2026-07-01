@@ -1,12 +1,12 @@
 using System;
 
-namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
+namespace BancoBr.API.Base.Models
 {
     /// <summary>
     /// Um boleto a pagar dentro de um lote. Espelha os parâmetros de
-    /// <see cref="PagamentoBoletoClient.PagarBoletoComConsultaAsync"/> — o Sicoob não tem um
-    /// endpoint de lote, então cada item ainda gera consulta + pagamento como chamadas HTTP
-    /// separadas; isto só evita que o ERP reimplemente o loop e o tratamento de erro parcial.
+    /// PagarBoletoComConsultaAsync — bancos sem endpoint de lote geram consulta + pagamento
+    /// como chamadas HTTP separadas; isto só evita que o ERP reimplemente o loop e o
+    /// tratamento de erro parcial.
     /// </summary>
     public class PagamentoBoletoLoteItem
     {

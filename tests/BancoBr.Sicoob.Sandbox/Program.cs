@@ -113,7 +113,7 @@ try
             Issuer = numeroAgencia,
             Number = numeroConta,
             AccountType = 0,
-            PersonType = 0,
+            PersonType = 1,
         },
     };
 
