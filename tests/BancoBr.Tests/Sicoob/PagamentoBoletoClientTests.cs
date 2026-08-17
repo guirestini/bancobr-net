@@ -1,9 +1,9 @@
 using System.Net;
-using BancoBr.API.Base.Models;
 using BancoBr.API.Core.Models;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
-using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
+using BancoBr.Common.Enums;
+using BancoBr.Common.Instances;
 using Xunit;
 
 namespace BancoBr.Tests.Sicoob
@@ -11,6 +11,8 @@ namespace BancoBr.Tests.Sicoob
     public class PagamentoBoletoClientTests
     {
         private static readonly Uri BaseUrl = new Uri("https://api.sicoob.com.br/pagamentos/v3");
+
+        private const string CodigoBarras = "00000000000000000000000000000000000000000000";
 
         private static PagamentoBoletoClient CriarClient(FakeHttpMessageHandler handler)
         {
@@ -23,6 +25,24 @@ namespace BancoBr.Tests.Sicoob
             var httpClient = new HttpClient(handler);
             return new PagamentoBoletoClient(httpClient, new FakeOAuthTokenProvider(), "fake-client-id", BaseUrl);
         }
+
+        /// <summary>Conta pagadora usada nos testes (equivale ao numeroConta/numeroAgencia dos antigos parâmetros soltos).</summary>
+        private static Correntista CriarOrigem(int numeroAgencia = 1234, int numeroConta = 1234569) => new Correntista
+        {
+            NumeroAgencia = numeroAgencia,
+            NumeroConta = numeroConta,
+            Nome = "Rosa Maria da Silva",
+            CPF_CNPJ = "123.456.789-00",
+            TipoPessoa = TipoInscricaoCPFCNPJEnum.CNPJ,
+        };
+
+        private static Movimento CriarMovimento(string? codigoBarras = CodigoBarras) => new Movimento
+        {
+            MovimentoItem = new MovimentoItemPagamentoTituloCodigoBarra { CodigoBarras = codigoBarras },
+        };
+
+        private static MovimentoItemPagamentoTituloCodigoBarra Item(Movimento movimento) =>
+            (MovimentoItemPagamentoTituloCodigoBarra)movimento.MovimentoItem;
 
         [Fact]
         public async Task ConsultarBoletoAsync_200_RetornaIdentificadorConsulta()
@@ -49,23 +69,29 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
 
-            var resultado = await client.ConsultarBoletoAsync("00000000000000000000000000000000000000000000", 1234569);
+            var resultado = await client.ConsultarBoletoAsync(movimento, CriarOrigem());
 
-            Assert.Equal("hash-123", resultado.IdentificadorConsulta);
-            Assert.Equal(756, resultado.NumeroInstituicaoEmissora);
+            Assert.Same(movimento, resultado);
+            Assert.Equal("hash-123", Item(resultado).IdentificadorConsulta);
+            Assert.Equal(756, Item(resultado).BancoCodigoBarra);
+            Assert.Equal(152.3m, resultado.ValorPagamento);
             Assert.Equal("fake-client-id", handler.LastRequest!.Headers.GetValues("client_id").Single());
         }
 
         [Fact]
-        public async Task ConsultarBoletoAsync_204_RetornaNull()
+        public async Task ConsultarBoletoAsync_204_SinalizaBoletoNaoEncontrado()
         {
             var handler = new FakeHttpMessageHandler(HttpStatusCode.NoContent);
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
 
-            var resultado = await client.ConsultarBoletoAsync("00000000000000000000000000000000000000000000", 1234569);
+            var resultado = await client.ConsultarBoletoAsync(movimento, CriarOrigem());
 
-            Assert.Null(resultado);
+            Assert.Equal(BancoBrSituacaoEnum.Cancelado, resultado.SituacaoBancoBr);
+            Assert.Equal("Boleto não encontrado.", resultado.DetalheRejeicaoBancoBr);
+            Assert.Null(Item(resultado).IdentificadorConsulta);
         }
 
         [Fact]
@@ -90,27 +116,25 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
-            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest
-            {
-                IdentificadorConsulta = "hash-123",
-                ValorBoleto = 100.36m,
-                Amount = 255.63m,
-                Date = new DateTime(2019, 10, 20),
-                NumeroCpfCnpjPortador = "12345678900",
-                NomePortador = "Rosa Maria da Silva",
-                AceitaValorDivergente = true,
-                DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount { Issuer = 1234, Number = 1234569, AccountType = 0, PersonType = 1 },
-            };
 
-            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569, Guid.NewGuid()));
+            var movimento = CriarMovimento();
+            movimento.ValorPagamento = 255.63m;
+            movimento.DataPagamento = new DateTime(2019, 10, 20);
+            Item(movimento).IdentificadorConsulta = "hash-123";
+            Item(movimento).ValorCodigoBarra = 100.36m;
+            Item(movimento).AceitaValorDivergente = true;
 
-            Assert.False(resultado.PendenteAssinatura);
-            Assert.NotNull(resultado.Comprovante);
-            Assert.Equal(1983450, resultado.Comprovante.IdPagamento);
-            Assert.Equal("Efetivado", resultado.Comprovante.SituacaoPagamento);
-            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.Comprovante.BancoBrSituacao);
+            var resultado = await client.PagarBoletoAsync(movimento, CriarOrigem(), IdempotencyKey.New(1234, 1234569, Guid.NewGuid()));
+
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.SituacaoBancoBr);
+            Assert.Equal("1983450", resultado.NumeroDocumentoNoBanco);
+            Assert.Equal("89C3E9FD-1A37-40BE-A85B-69AF118D336A", Item(resultado).NumeroAutenticacaoPagamento);
             Assert.Contains("\"identificadorConsulta\":\"hash-123\"", handler.LastRequestBody);
             Assert.Contains("2019-10-20", handler.LastRequestBody);
+            // A conta pagadora (Correntista) substitui os antigos parâmetros soltos de portador/conta.
+            Assert.Contains("\"numeroCpfCnpjPortador\":\"12345678900\"", handler.LastRequestBody);
+            Assert.Contains("\"issuer\":1234", handler.LastRequestBody);
+            Assert.Contains("\"number\":1234569", handler.LastRequestBody);
         }
 
         [Fact]
@@ -118,12 +142,26 @@ namespace BancoBr.Tests.Sicoob
         {
             var handler = new FakeHttpMessageHandler(HttpStatusCode.Accepted);
             var client = CriarClient(handler);
-            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest { DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount() };
+            var movimento = CriarMovimento();
 
-            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569, Guid.NewGuid()));
+            var resultado = await client.PagarBoletoAsync(movimento, CriarOrigem(), IdempotencyKey.New(1234, 1234569, Guid.NewGuid()));
 
-            Assert.True(resultado.PendenteAssinatura);
-            Assert.Null(resultado.Comprovante);
+            Assert.Equal(BancoBrSituacaoEnum.Agendado, resultado.SituacaoBancoBr);
+            Assert.Contains("assinatura", resultado.DetalheRejeicaoBancoBr);
+            Assert.Null(resultado.NumeroDocumentoNoBanco);
+        }
+
+        [Fact]
+        public async Task PagarBoletoAsync_204_RetornaEfetivadoSemComprovante()
+        {
+            var handler = new FakeHttpMessageHandler(HttpStatusCode.NoContent);
+            var client = CriarClient(handler);
+            var movimento = CriarMovimento();
+
+            var resultado = await client.PagarBoletoAsync(movimento, CriarOrigem(), IdempotencyKey.New(1234, 1234569, Guid.NewGuid()));
+
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.SituacaoBancoBr);
+            Assert.Null(resultado.NumeroDocumentoNoBanco);
         }
 
         [Fact]
@@ -135,10 +173,9 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, json);
             var client = CriarClient(handler);
-            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest { DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount() };
 
             var ex = await Assert.ThrowsAsync<SicoobApiException>(() =>
-                client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, IdempotencyKey.New(1234, 1234569, Guid.NewGuid())));
+                client.PagarBoletoAsync(CriarMovimento(), CriarOrigem(), IdempotencyKey.New(1234, 1234569, Guid.NewGuid())));
 
             Assert.Equal(400, ex.HttpStatusCode);
             Assert.Equal("10013", ex.Mensagens.Single().Codigo);
@@ -156,18 +193,15 @@ namespace BancoBr.Tests.Sicoob
                 (HttpStatusCode.BadRequest, erroJson),
                 (HttpStatusCode.OK, ComprovanteJson));
             var client = CriarClient(handler);
-            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest { DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount() };
+            var movimento = CriarMovimento();
             var idempotencyKey = IdempotencyKey.New(1234, 1234569, Guid.NewGuid());
 
-            var resultado = await client.PagarBoletoAsync("00000000000000000000000000000000000000000000", request, idempotencyKey);
+            var resultado = await client.PagarBoletoAsync(movimento, CriarOrigem(), idempotencyKey);
 
             Assert.Equal(2, handler.Requests.Count);
             Assert.Contains(idempotencyKey, handler.Requests[1].RequestUri!.ToString());
-            Assert.False(resultado.PendenteAssinatura);
-            Assert.NotNull(resultado.Comprovante);
-            Assert.Equal(1983450, resultado.Comprovante.IdPagamento);
-            Assert.Equal("Efetivado", resultado.Comprovante.SituacaoPagamento);
-            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.Comprovante.BancoBrSituacao);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.SituacaoBancoBr);
+            Assert.Equal("1983450", resultado.NumeroDocumentoNoBanco);
         }
 
         [Fact]
@@ -175,11 +209,13 @@ namespace BancoBr.Tests.Sicoob
         {
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, ComprovanteJson);
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
+            movimento.NumeroDocumentoNoBanco = "1983450";
 
-            var resultado = await client.ConsultarComprovantePorIdAsync(1983450, 1234569);
+            var resultado = await client.ConsultarComprovantePorIdAsync(movimento, CriarOrigem());
 
-            Assert.Equal("Efetivado", resultado.SituacaoPagamento);
-            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.BancoBrSituacao);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.SituacaoBancoBr);
+            Assert.Equal("1983450", resultado.NumeroDocumentoNoBanco);
         }
 
         [Fact]
@@ -194,10 +230,12 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
+            movimento.NumeroDocumentoNoBanco = "1983450";
 
-            var resultado = await client.ConsultarComprovantePorIdAsync(1983450, 1234569);
+            var resultado = await client.ConsultarComprovantePorIdAsync(movimento, CriarOrigem());
 
-            Assert.Equal(BancoBrSituacaoEnum.NaoIntegrado, resultado.BancoBrSituacao);
+            Assert.Equal(BancoBrSituacaoEnum.NaoIntegrado, resultado.SituacaoBancoBr);
         }
 
         [Fact]
@@ -212,10 +250,26 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
+            movimento.NumeroDocumentoNoBanco = "1983450";
 
-            var resultado = await client.ConsultarComprovantePorIdAsync(1983450, 1234569);
+            var resultado = await client.ConsultarComprovantePorIdAsync(movimento, CriarOrigem());
 
-            Assert.Equal(BancoBrSituacaoEnum.Rejeitado, resultado.BancoBrSituacao);
+            Assert.Equal(BancoBrSituacaoEnum.Rejeitado, resultado.SituacaoBancoBr);
+        }
+
+        [Fact]
+        public async Task ConsultarComprovantePorIdempotencyAsync_200_MontaMovimentoAPartirDoComprovante()
+        {
+            var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, ComprovanteJson);
+            var client = CriarClient(handler);
+
+            var resultado = await client.ConsultarComprovantePorIdempotencyAsync("1234-1234569-" + Guid.NewGuid().ToString("D"));
+
+            Assert.NotNull(resultado);
+            Assert.Equal("1983450", resultado!.NumeroDocumentoNoBanco);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.SituacaoBancoBr);
+            Assert.IsType<MovimentoItemPagamentoTituloCodigoBarra>(resultado.MovimentoItem);
         }
 
         [Fact]
@@ -223,10 +277,13 @@ namespace BancoBr.Tests.Sicoob
         {
             var handler = new FakeHttpMessageHandler(HttpStatusCode.NoContent);
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
+            movimento.NumeroDocumentoNoBanco = "1983450";
 
-            await client.CancelarAgendamentoAsync(1983450, 1234569);
+            var resultado = await client.CancelarAgendamentoAsync(movimento, CriarOrigem());
 
             Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
+            Assert.Equal(BancoBrSituacaoEnum.Cancelado, resultado.SituacaoBancoBr);
         }
 
         [Fact]
@@ -332,22 +389,17 @@ namespace BancoBr.Tests.Sicoob
                 (HttpStatusCode.OK, ConsultaJsonNaoBloqueado),
                 (HttpStatusCode.OK, ComprovanteJson));
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
 
-            var resultado = await client.PagarBoletoComConsultaAsync(
-                "00000000000000000000000000000000000000000000",
-                numeroConta: 1234569,
-                numeroAgencia: 4342,
-                idLancamento: Guid.NewGuid(),
-                numeroCpfCnpjPortador: "12345678900",
-                nomePortador: "Rosa Maria da Silva");
+            var resultado = await client.PagarBoletoComConsultaAsync(movimento, CriarOrigem(4342, 1234569), Guid.NewGuid());
 
             Assert.Equal(2, handler.Requests.Count);
             Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
             Assert.Equal(HttpMethod.Post, handler.Requests[1].Method);
-            Assert.False(resultado.BoletoNaoEncontrado);
-            Assert.False(resultado.PagamentoBloqueado);
-            Assert.NotNull(resultado.Comprovante);
-            Assert.Equal(1983450, resultado.Comprovante.IdPagamento);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.SituacaoBancoBr);
+            Assert.Equal("1983450", resultado.NumeroDocumentoNoBanco);
+            // O IdentificadorConsulta da consulta é reaproveitado no pagamento.
+            Assert.Equal("hash-123", Item(resultado).IdentificadorConsulta);
         }
 
         [Fact]
@@ -355,18 +407,14 @@ namespace BancoBr.Tests.Sicoob
         {
             var handler = new SequencedFakeHttpMessageHandler((HttpStatusCode.NoContent, null));
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
 
-            var resultado = await client.PagarBoletoComConsultaAsync(
-                "00000000000000000000000000000000000000000000",
-                numeroConta: 1234569,
-                numeroAgencia: 4342,
-                idLancamento: Guid.NewGuid(),
-                numeroCpfCnpjPortador: "12345678900",
-                nomePortador: "Rosa Maria da Silva");
+            var resultado = await client.PagarBoletoComConsultaAsync(movimento, CriarOrigem(4342, 1234569), Guid.NewGuid());
 
             Assert.Single(handler.Requests);
-            Assert.True(resultado.BoletoNaoEncontrado);
-            Assert.Null(resultado.Comprovante);
+            Assert.Equal(BancoBrSituacaoEnum.Cancelado, resultado.SituacaoBancoBr);
+            Assert.Equal("Boleto não encontrado.", resultado.DetalheRejeicaoBancoBr);
+            Assert.Null(resultado.NumeroDocumentoNoBanco);
         }
 
         [Fact]
@@ -374,19 +422,14 @@ namespace BancoBr.Tests.Sicoob
         {
             var handler = new SequencedFakeHttpMessageHandler((HttpStatusCode.OK, ConsultaJsonBloqueado));
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
 
-            var resultado = await client.PagarBoletoComConsultaAsync(
-                "00000000000000000000000000000000000000000000",
-                numeroConta: 1234569,
-                numeroAgencia: 4342,
-                idLancamento: Guid.NewGuid(),
-                numeroCpfCnpjPortador: "12345678900",
-                nomePortador: "Rosa Maria da Silva");
+            var resultado = await client.PagarBoletoComConsultaAsync(movimento, CriarOrigem(4342, 1234569), Guid.NewGuid());
 
             Assert.Single(handler.Requests);
-            Assert.True(resultado.PagamentoBloqueado);
-            Assert.Equal("Pagamento bloqueado", resultado.MensagemBloqueio);
-            Assert.Null(resultado.Comprovante);
+            Assert.Equal(BancoBrSituacaoEnum.Cancelado, resultado.SituacaoBancoBr);
+            Assert.Equal("Pagamento bloqueado", resultado.DetalheRejeicaoBancoBr);
+            Assert.Null(resultado.NumeroDocumentoNoBanco);
         }
 
         [Fact]
@@ -397,10 +440,10 @@ namespace BancoBr.Tests.Sicoob
                 (HttpStatusCode.OK, ConsultaJsonNaoBloqueado));
             var client = CriarClient(handler);
 
-            var resultado = await client.ConsultarBoletoAsync("00000000000000000000000000000000000000000000", 1234569);
+            var resultado = await client.ConsultarBoletoAsync(CriarMovimento(), CriarOrigem());
 
             Assert.Equal(2, handler.Requests.Count);
-            Assert.Equal("hash-123", resultado!.IdentificadorConsulta);
+            Assert.Equal("hash-123", Item(resultado).IdentificadorConsulta);
         }
 
         [Fact]
@@ -420,24 +463,28 @@ namespace BancoBr.Tests.Sicoob
             var client = CriarClient(handler);
             var itens = new[]
             {
-                new BancoBr.API.Base.Models.PagamentoBoletoLoteItem { CodigoBarras = "boleto-1", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 1" },
-                new BancoBr.API.Base.Models.PagamentoBoletoLoteItem { CodigoBarras = "boleto-2", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 2" },
-                new BancoBr.API.Base.Models.PagamentoBoletoLoteItem { CodigoBarras = "boleto-3", NumeroConta = 1234569, NumeroAgencia = 4342, IdLancamento = Guid.NewGuid(), NumeroCpfCnpjPortador = "12345678900", NomePortador = "Item 3" },
+                (Movimento: CriarMovimento("boleto-1"), IdLancamento: Guid.NewGuid()),
+                (Movimento: CriarMovimento("boleto-2"), IdLancamento: Guid.NewGuid()),
+                (Movimento: CriarMovimento("boleto-3"), IdLancamento: Guid.NewGuid()),
             };
 
-            var resultados = await client.PagarLoteBoletosAsync(itens);
+            var resultados = await client.PagarLoteBoletosAsync(itens, CriarOrigem(4342, 1234569));
 
             Assert.Equal(3, resultados.Count);
 
             Assert.True(resultados[0].Sucesso);
-            Assert.NotNull(resultados[0].Resultado?.Comprovante);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultados[0].Movimento.SituacaoBancoBr);
+            Assert.Equal("1983450", resultados[0].Movimento.NumeroDocumentoNoBanco);
 
             Assert.True(resultados[1].Sucesso);
-            Assert.True(resultados[1].Resultado!.PagamentoBloqueado);
+            Assert.Equal(BancoBrSituacaoEnum.Cancelado, resultados[1].Movimento.SituacaoBancoBr);
+            Assert.Equal("Pagamento bloqueado", resultados[1].Movimento.DetalheRejeicaoBancoBr);
 
             Assert.False(resultados[2].Sucesso);
             Assert.IsType<SicoobApiException>(resultados[2].Erro);
             Assert.Equal("10013", ((SicoobApiException)resultados[2].Erro).Mensagens.Single().Codigo);
+            // O IdLancamento continua acessível para o ERP correlacionar a falha.
+            Assert.Equal(itens[2].IdLancamento, resultados[2].IdLancamento);
         }
     }
 }

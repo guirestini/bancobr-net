@@ -1,4 +1,5 @@
 using System;
+using BancoBr.Common.Enums;
 using Newtonsoft.Json;
 
 namespace BancoBr.API.Base.Models

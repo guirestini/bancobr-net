@@ -1,4 +1,5 @@
 using System;
+using BancoBr.Common.Instances;
 
 namespace BancoBr.API.Base.Models
 {
@@ -8,25 +9,32 @@ namespace BancoBr.API.Base.Models
     /// </summary>
     public class PagamentoBoletoLoteResultadoItem
     {
-        public PagamentoBoletoLoteItem Item { get; }
+        /// <summary>
+        /// O mesmo <see cref="Common.Instances.Movimento"/> enviado no lote, já com o resultado
+        /// do banco aplicado quando o item foi processado com sucesso.
+        /// </summary>
+        public Movimento Movimento { get; }
 
-        public PagamentoBoletoResultado Resultado { get; }
+        /// <summary>
+        /// Identificador do lançamento no ERP, usado para compor a idempotency key do item.
+        /// </summary>
+        public Guid IdLancamento { get; }
 
         public Exception Erro { get; }
 
         public bool Sucesso => Erro == null;
 
-        private PagamentoBoletoLoteResultadoItem(PagamentoBoletoLoteItem item, PagamentoBoletoResultado resultado, Exception erro)
+        private PagamentoBoletoLoteResultadoItem(Movimento movimento, Guid idLancamento, Exception erro)
         {
-            Item = item;
-            Resultado = resultado;
+            Movimento = movimento;
+            IdLancamento = idLancamento;
             Erro = erro;
         }
 
-        public static PagamentoBoletoLoteResultadoItem ComSucesso(PagamentoBoletoLoteItem item, PagamentoBoletoResultado resultado) =>
-            new PagamentoBoletoLoteResultadoItem(item, resultado, erro: null);
+        public static PagamentoBoletoLoteResultadoItem ComSucesso(Movimento movimento, Guid idLancamento) =>
+            new PagamentoBoletoLoteResultadoItem(movimento, idLancamento, erro: null);
 
-        public static PagamentoBoletoLoteResultadoItem ComFalha(PagamentoBoletoLoteItem item, Exception erro) =>
-            new PagamentoBoletoLoteResultadoItem(item, resultado: null, erro);
+        public static PagamentoBoletoLoteResultadoItem ComFalha(Movimento movimento, Guid idLancamento, Exception erro) =>
+            new PagamentoBoletoLoteResultadoItem(movimento, idLancamento, erro);
     }
 }

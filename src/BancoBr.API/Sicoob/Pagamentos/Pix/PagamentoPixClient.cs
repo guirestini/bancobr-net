@@ -9,6 +9,8 @@ using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Pix.Models;
 using BancoBr.Common.Core;
+using BancoBr.Common.Enums;
+using BancoBr.Common.Instances;
 using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Pix
@@ -16,6 +18,12 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
     /// <summary>
     /// Cliente para a API "Pix Pagamentos" do Sicoob, v2 — iniciação de pagamento por
     /// chave DICT e confirmação. Webhook não é implementado.
+    ///
+    /// Esta classe é o limite de mapeamento entre o contrato público
+    /// (<see cref="Movimento"/>/<see cref="MovimentoItem"/>, compartilhado com o CNAB) e os
+    /// DTOs de wire do Sicoob (<c>Pix.Models.*</c>, detalhe de implementação) — mesmo papel
+    /// que BancoBr.CNAB.Base.Banco tem para os Segmentos, e igualmente por composição, nunca
+    /// por herança.
     /// </summary>
     public class PagamentoPixClient : PagamentoPixApiBase
     {
@@ -36,6 +44,13 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
         /// (padrão ^[0-9A-Z]{8}$), por isso com zero à esquerda.
         /// </summary>
         private const string SicoobIspb = "54037916";
+
+        /// <summary>
+        /// Valor de "origem.tipo" no pagamento via QR Code. O <see cref="Correntista"/> não
+        /// carrega tipo de conta, e a única modalidade habilitada para pagamento via API é a
+        /// conta corrente — mesmo valor que o consumidor já enviava antes desta migração.
+        /// </summary>
+        private const string TipoContaCorrenteQrCode = "CORRENTE";
 
         /// <summary>
         /// Rate limit documentado para a API Pix Pagamentos: 1 requisição por segundo
@@ -115,127 +130,199 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
             return new OAuthTokenProvider(tokenHttpClient, tokenOptions);
         }
 
-        public override async Task<BancoBr.API.Base.Models.RetornoPagamento> ConsultarPagamentoAsync(string endToEndId, CancellationToken cancellationToken = default)
+        #region ::. Operações .::
+
+        public override async Task<Movimento> ConsultarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default)
         {
-            var url = $"{_baseUrl}pagamentos/{endToEndId}";
+            if (movimento == null) throw new ArgumentNullException(nameof(movimento));
+
+            if (string.IsNullOrWhiteSpace(movimento.NumeroDocumentoNoBanco))
+                throw new InvalidOperationException("Para consultar um pagamento Pix, o movimento precisa ter o EndToEndId em NumeroDocumentoNoBanco.");
+
+            var url = $"{_baseUrl}pagamentos/{movimento.NumeroDocumentoNoBanco}";
             var dto = await SendAsync<RetornoPagamento>(HttpMethod.Get, url, body: null, cancellationToken).ConfigureAwait(false);
-            return MapRetornoPagamento(dto);
+
+            return AplicarRetornoPagamento(movimento, dto);
         }
 
-        public override async Task<BancoBr.API.Base.Models.PixIniciacaoResponse> IniciarPagamentoAsync(string chave, DateTime? dataAgendamento, CancellationToken cancellationToken = default)
+        public override async Task<Movimento> IniciarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default)
         {
+            if (movimento == null) throw new ArgumentNullException(nameof(movimento));
+
+            var item = movimento.MovimentoItem as MovimentoItemTransferenciaPIX;
+            if (item == null)
+                throw new InvalidOperationException("IniciarPagamentoAsync espera um MovimentoItemTransferenciaPIX em Movimento.MovimentoItem.");
+
+            if (string.IsNullOrWhiteSpace(item.ChavePIX))
+                throw new InvalidOperationException("A chave Pix não foi informada no movimento.");
+
             var url = $"{_baseUrl}pagamentos";
-            var json = JsonConvert.SerializeObject(new RequisicaoIniciacaoPix { Chave = chave, DataAgendamento = NormalizarDataAgendamento(dataAgendamento) }, SerializerSettings);
+            var wireRequest = new RequisicaoIniciacaoPix
+            {
+                Chave = item.ChavePIX,
+                DataAgendamento = NormalizarDataAgendamento(movimento.DataPagamento),
+            };
+            var json = JsonConvert.SerializeObject(wireRequest, SerializerSettings);
 
             var dto = await SendAsync<PixIniciacaoResponse>(HttpMethod.Post, url, json, cancellationToken).ConfigureAwait(false);
-            return dto == null ? null : new BancoBr.API.Base.Models.PixIniciacaoResponse
+            if (dto == null)
+                return movimento;
+
+            movimento.NumeroDocumentoNoBanco = dto.EndToEndId;
+
+            if (!string.IsNullOrWhiteSpace(dto.Chave))
+                item.ChavePIX = dto.Chave;
+
+            item.TipoChaveConfirmado = dto.Tipo;
+
+            if (dto.Proprietario != null)
             {
-                EndToEndId = dto.EndToEndId,
-                Chave = dto.Chave,
-                Tipo = dto.Tipo,
-                Proprietario = dto.Proprietario == null ? null : new BancoBr.API.Base.Models.PixProprietario
-                {
-                    Identificador = dto.Proprietario.Identificador,
-                    Nome = dto.Proprietario.Nome,
-                    Tipo = dto.Proprietario.Tipo,
-                },
-            };
+                item.TitularConfirmadoNome = dto.Proprietario.Nome;
+                item.TitularConfirmadoDocumento = dto.Proprietario.Identificador;
+                item.TitularConfirmadoTipo = dto.Proprietario.Tipo;
+            }
+
+            return movimento;
         }
 
-        public override async Task<BancoBr.API.Base.Models.RetornoPagamento> ConfirmarPagamentoAsync(BancoBr.API.Base.Models.RequisicaoEfetivacaoPix request, CancellationToken cancellationToken = default)
+        public override async Task<Movimento> ConfirmarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default)
         {
+            if (movimento == null) throw new ArgumentNullException(nameof(movimento));
+
+            if (string.IsNullOrWhiteSpace(movimento.NumeroDocumentoNoBanco))
+                throw new InvalidOperationException("Para confirmar um pagamento Pix, o movimento precisa ter o EndToEndId (devolvido por IniciarPagamentoAsync) em NumeroDocumentoNoBanco.");
+
             var url = $"{_baseUrl}pagamentos/confirmacao";
             var wireRequest = new RequisicaoEfetivacaoPix
             {
-                EndToEndId = request.EndToEndId,
-                Valor = request.Valor.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ','),
-                Descricao = request.Descricao,
-                DataAgendamento = NormalizarDataAgendamento(request.DataAgendamento),
+                EndToEndId = movimento.NumeroDocumentoNoBanco,
+                Valor = movimento.ValorPagamento.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ','),
+                Descricao = movimento.NumeroDocumento,
+                DataAgendamento = NormalizarDataAgendamento(movimento.DataPagamento),
             };
             var json = JsonConvert.SerializeObject(wireRequest, SerializerSettings);
 
             var dto = await SendAsync<RetornoPagamento>(HttpMethod.Post, url, json, cancellationToken).ConfigureAwait(false);
-            return MapRetornoPagamento(dto);
+
+            return AplicarRetornoPagamento(movimento, dto);
+        }
+
+        public override async Task<Movimento> PagarViaQrCodeAsync(Correntista origem, Movimento movimento, CancellationToken cancellationToken = default)
+        {
+            if (movimento == null) throw new ArgumentNullException(nameof(movimento));
+            if (origem == null) throw new ArgumentNullException(nameof(origem));
+
+            var item = movimento.MovimentoItem as MovimentoItemPagamentoTituloPIXQRCode;
+            if (item == null)
+                throw new InvalidOperationException("PagarViaQrCodeAsync espera um MovimentoItemPagamentoTituloPIXQRCode em Movimento.MovimentoItem.");
+
+            var url = $"{_baseUrl}pagamentos/qrcode";
+            var wireRequest = new RequisicaoPagamentoQrCode
+            {
+                QrCode = item.QrCode,
+                Repeticao = item.Repeticao,
+                DataVencimento = item.DataVencimento == default(DateTime) ? (DateTime?)null : item.DataVencimento,
+                DataAgendamento = NormalizarDataAgendamento(movimento.DataPagamento),
+                Valor = movimento.ValorPagamento.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                PagarComJurosMulta = item.PagarComJurosMulta,
+                Origem = new DadosOrigemQrCode
+                {
+                    Ispb = SicoobIspb,
+                    CpfCnpj = origem.CPF_CNPJ.RemoveMascaraCpfCnpj(),
+                    Nome = origem.Nome,
+                    Conta = $"{origem.NumeroConta}{origem.DVConta}",
+                    Agencia = origem.NumeroAgencia.ToString(),
+                    Tipo = TipoContaCorrenteQrCode,
+                },
+                Destino = movimento.Favorecido == null ? null : new DadosDestinatarioQrCode
+                {
+                    CpfCnpj = movimento.Favorecido.CPF_CNPJ.RemoveMascaraCpfCnpj(),
+                },
+            };
+            var json = JsonConvert.SerializeObject(wireRequest, SerializerSettings);
+
+            var dto = await SendAsync<PagamentoQrCodeResponse>(HttpMethod.Post, url, json, cancellationToken).ConfigureAwait(false);
+            if (dto == null)
+                return movimento;
+
+            AplicarCamposComuns(movimento, dto.EndToEndId, dto.Estado, dto.Valor, dto.DetalheRejeicao, dto.Descricao, dto.Horario, dto.DataAgendamento);
+
+            item.TXID = dto.TxId;
+            item.ValorOriginal = dto.ValorOriginal;
+            item.Abatimento = dto.Abatimento;
+            item.Desconto = dto.Desconto;
+            item.Multa = dto.Multa;
+            item.Juros = dto.Juros;
+            item.TipoQrcode = dto.TipoQrcode;
+
+            return movimento;
+        }
+
+        #endregion
+
+        #region ::. Mapeamento de resposta .::
+
+        private static Movimento AplicarRetornoPagamento(Movimento movimento, RetornoPagamento dto)
+        {
+            if (dto == null)
+                return movimento;
+
+            AplicarCamposComuns(movimento, dto.EndToEndId, dto.Estado, dto.Valor, dto.DetalheRejeicao, dto.Descricao, dto.Horario, dto.DataAgendamento);
+
+            // "destino" identifica o titular efetivamente creditado — a mesma entidade que a
+            // iniciação por chave devolve em "proprietario". Nome e documento são mapeados; o
+            // "tipo" NÃO é, porque aqui significa tipo de conta, e não tipo de pessoa como em
+            // PixProprietario.Tipo — sobrescrevê-lo corromperia TitularConfirmadoTipo.
+            var itemPix = movimento.MovimentoItem as MovimentoItemTransferenciaPIX;
+            if (itemPix != null && dto.Destino != null)
+            {
+                if (!string.IsNullOrWhiteSpace(dto.Destino.Nome))
+                    itemPix.TitularConfirmadoNome = dto.Destino.Nome;
+
+                if (!string.IsNullOrWhiteSpace(dto.Destino.CpfCnpj))
+                    itemPix.TitularConfirmadoDocumento = dto.Destino.CpfCnpj;
+
+                if (!string.IsNullOrWhiteSpace(dto.Destino.ChaveDict))
+                    itemPix.ChavePIX = dto.Destino.ChaveDict;
+            }
+
+            return movimento;
+        }
+
+        private static void AplicarCamposComuns(Movimento movimento, string endToEndId, string estado, decimal valor, string detalheRejeicao, string descricao, DateTime? horario, DateTime? dataAgendamento)
+        {
+            if (!string.IsNullOrWhiteSpace(endToEndId))
+                movimento.NumeroDocumentoNoBanco = endToEndId;
+
+            movimento.SituacaoBancoBr = MapEstadoParaSituacao(estado);
+            movimento.DetalheRejeicaoBancoBr = detalheRejeicao;
+            movimento.HorarioBancoBr = horario;
+
+            if (valor != 0)
+                movimento.ValorPagamento = valor;
+
+            if (!string.IsNullOrWhiteSpace(descricao))
+                movimento.NumeroDocumento = descricao;
+
+            if (dataAgendamento.HasValue)
+                movimento.DataPagamento = dataAgendamento.Value;
         }
 
         /// <summary>
         /// O Sicoob rejeita "dataAgendamento" quando a data não é estritamente posterior a
         /// hoje ("A data de agendamento deve ser maior do que o dia corrente."). Para
         /// pagamento no mesmo dia, o campo deve ser omitido do payload (liquidação imediata),
-        /// em vez de enviado com a data de hoje.
+        /// em vez de enviado com a data de hoje. Um <see cref="Movimento"/> sem data de
+        /// pagamento (default) também vira liquidação imediata.
         /// </summary>
-        private static DateTime? NormalizarDataAgendamento(DateTime? dataAgendamento) =>
-            dataAgendamento.HasValue && dataAgendamento.Value.Date <= DateTime.Today
+        private static DateTime? NormalizarDataAgendamento(DateTime dataAgendamento) =>
+            dataAgendamento == default(DateTime) || dataAgendamento.Date <= DateTime.Today
                 ? (DateTime?)null
                 : dataAgendamento;
 
-        public override async Task<BancoBr.API.Base.Models.PagamentoQrCodeResponse> PagarViaQrCodeAsync(BancoBr.API.Base.Models.RequisicaoPagamentoQrCode request, CancellationToken cancellationToken = default)
-        {
-            var url = $"{_baseUrl}pagamentos/qrcode";
-            var wireRequest = new RequisicaoPagamentoQrCode
-            {
-                QrCode = request.QrCode,
-                Repeticao = request.Repeticao,
-                DataVencimento = request.DataVencimento,
-                DataAgendamento = request.DataAgendamento,
-                Valor = request.Valor.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-                PagarComJurosMulta = request.PagarComJurosMulta,
-                Origem = request.Origem == null ? null : new DadosOrigemQrCode
-                {
-                    Ispb = SicoobIspb,
-                    CpfCnpj = request.Origem.CpfCnpj.RemoveMascaraCpfCnpj(),
-                    Nome = request.Origem.Nome,
-                    Conta = request.Origem.Conta,
-                    Agencia = request.Origem.Agencia,
-                    Tipo = request.Origem.Tipo,
-                },
-                Destino = request.Destino == null ? null : new DadosDestinatarioQrCode
-                {
-                    CpfCnpj = request.Destino.CpfCnpj.RemoveMascaraCpfCnpj(),
-                },
-            };
-            var json = JsonConvert.SerializeObject(wireRequest, SerializerSettings);
-
-            var dto = await SendAsync<PagamentoQrCodeResponse>(HttpMethod.Post, url, json, cancellationToken).ConfigureAwait(false);
-            return dto == null ? null : new BancoBr.API.Base.Models.PagamentoQrCodeResponse
-            {
-                EndToEndId = dto.EndToEndId,
-                Estado = dto.Estado,
-                Valor = dto.Valor,
-                DetalheRejeicao = dto.DetalheRejeicao,
-                Descricao = dto.Descricao,
-                Horario = dto.Horario,
-                Origem = MapDadosContaUsuario(dto.Origem),
-                Destino = MapDadosContaUsuario(dto.Destino),
-                DataAgendamento = dto.DataAgendamento,
-                TxId = dto.TxId,
-                ValorOriginal = dto.ValorOriginal,
-                Abatimento = dto.Abatimento,
-                Desconto = dto.Desconto,
-                Multa = dto.Multa,
-                Juros = dto.Juros,
-                TipoQrcode = dto.TipoQrcode,
-                BancoBrSituacao = MapEstadoParaSituacao(dto.Estado),
-            };
-        }
-
-        private static BancoBr.API.Base.Models.RetornoPagamento MapRetornoPagamento(RetornoPagamento dto) => dto == null ? null : new BancoBr.API.Base.Models.RetornoPagamento
-        {
-            EndToEndId = dto.EndToEndId,
-            Estado = dto.Estado,
-            Valor = dto.Valor,
-            DetalheRejeicao = dto.DetalheRejeicao,
-            Descricao = dto.Descricao,
-            Horario = dto.Horario,
-            Origem = MapDadosContaUsuario(dto.Origem),
-            Destino = MapDadosContaUsuario(dto.Destino),
-            DataAgendamento = dto.DataAgendamento,
-            BancoBrSituacao = MapEstadoParaSituacao(dto.Estado),
-        };
-
         /// <summary>
         /// ATENÇÃO: mapeamento best-effort do campo textual "Estado" retornado pela API Pix
-        /// Pagamentos do Sicoob para o enum agnóstico <see cref="BancoBr.API.Base.Models.BancoBrSituacaoEnum"/>.
+        /// Pagamentos do Sicoob para o enum agnóstico <see cref="BancoBrSituacaoEnum"/>.
         /// Os valores exatos possíveis de "Estado" NÃO estão confirmados neste código nem em
         /// documentação disponível no momento da implementação — esta lista foi construída a
         /// partir do vocabulário plausível de status de pagamento Pix. DEVE SER
@@ -243,7 +330,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
         /// confiar neste mapeamento. Qualquer valor não reconhecido cai em NaoIntegrado, para
         /// nunca reportar falsamente Efetivado/Cancelado.
         /// </summary>
-        private static BancoBr.API.Base.Models.BancoBrSituacaoEnum MapEstadoParaSituacao(string estado)
+        private static BancoBrSituacaoEnum MapEstadoParaSituacao(string estado)
         {
             switch (estado?.Trim().ToUpperInvariant())
             {
@@ -251,37 +338,29 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
                 case "LIQUIDADO":
                 case "EFETIVADO":
                 case "FINALIZADO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Efetivado;
+                    return BancoBrSituacaoEnum.Efetivado;
 
                 case "AGENDADO":
                 case "EM_PROCESSAMENTO":
                 case "PROCESSANDO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Agendado;
+                    return BancoBrSituacaoEnum.Agendado;
 
                 case "NAO_REALIZADO":
                 case "CANCELADO":
                 case "DEVOLVIDO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Cancelado;
+                    return BancoBrSituacaoEnum.Cancelado;
 
                 case "REJEITADO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Rejeitado;
+                    return BancoBrSituacaoEnum.Rejeitado;
 
                 default:
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.NaoIntegrado;
+                    return BancoBrSituacaoEnum.NaoIntegrado;
             }
         }
 
-        private static BancoBr.API.Base.Models.DadosContaUsuario MapDadosContaUsuario(DadosContaUsuario dto) => dto == null ? null : new BancoBr.API.Base.Models.DadosContaUsuario
-        {
-            Ispb = dto.Ispb,
-            CpfCnpj = dto.CpfCnpj,
-            Nome = dto.Nome,
-            Conta = dto.Conta,
-            Agencia = dto.Agencia,
-            Tipo = dto.Tipo,
-            ChaveDict = dto.ChaveDict,
-            BoolFavorecido = dto.BoolFavorecido,
-        };
+        #endregion
+
+        #region ::. Plumbing HTTP .::
 
         /// <summary>
         /// Ao contrário das APIs de Boletos/Convênios, a Pix Pagamentos não envelopa as
@@ -413,5 +492,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
 
             throw new SicoobApiException((int)response.StatusCode, mensagens);
         }
+
+        #endregion
     }
 }
