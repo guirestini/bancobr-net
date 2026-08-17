@@ -12,12 +12,20 @@ using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
 using BancoBr.Common.Core;
+using BancoBr.Common.Enums;
+using BancoBr.Common.Instances;
 using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos
 {
     /// <summary>
     /// Cliente para a API "Pagamentos de Boletos" (Cobrança Bancária) do Sicoob, v3.
+    ///
+    /// Esta classe é o limite de mapeamento entre o contrato público
+    /// (<see cref="Movimento"/>/<see cref="MovimentoItemPagamentoTituloCodigoBarra"/>,
+    /// compartilhado com o CNAB) e os DTOs de wire do Sicoob (<c>Boletos.Models.*</c>, detalhe
+    /// de implementação) — mesmo papel que BancoBr.CNAB.Base.Banco tem para os Segmentos, e
+    /// igualmente por composição, nunca por herança.
     /// </summary>
     public class PagamentoBoletoClient : PagamentoBoletoApiBase
     {
@@ -38,6 +46,9 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
         private static readonly string[] Scopes = { "pagamentos_consulta", "pagamentos_inclusao", "pagamentos_alteracao" };
 
         private const int RequestsPerSecond = 2;
+
+        /// <summary>0 - Conta Corrente (única modalidade habilitada para pagamento via API).</summary>
+        private const int TipoContaCorrente = 0;
 
         private readonly IAccessTokenProvider _tokenProvider;
         private readonly string _clientId;
@@ -111,80 +122,60 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return new OAuthTokenProvider(tokenHttpClient, tokenOptions);
         }
 
-        public override async Task<BancoBr.API.Base.Models.BoletoConsultaResponse> ConsultarBoletoAsync(string codigoBarras, long numeroConta, DateTime? dataPagamento = null, CancellationToken cancellationToken = default)
-        {
-            var url = $"{_baseUrl}boletos/{codigoBarras.JustNumbers()}?numeroConta={numeroConta}";
-            if (dataPagamento.HasValue)
-            {
-                url += $"&dataPagamento={dataPagamento.Value:yyyy-MM-dd}";
-            }
+        #region ::. Operações .::
 
-            var resposta = await SendAsync<BoletoConsultaResponse>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
+        public override async Task<Movimento> ConsultarBoletoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
+        {
+            var item = ExtrairItem(movimento);
+            if (origem == null) throw new ArgumentNullException(nameof(origem));
+
+            var consulta = await ConsultarBoletoWireAsync(item.CodigoBarras, origem.NumeroConta, DataPagamentoOuNulo(movimento), cancellationToken)
                 .ConfigureAwait(false);
 
-            return MapToAgnostic(resposta);
-        }
-
-        public override async Task<BancoBr.API.Base.Models.PagamentoBoletoResultado> PagarBoletoComConsultaAsync(string codigoBarras, long numeroConta, int numeroAgencia, Guid idLancamento, string numeroCpfCnpjPortador, string nomePortador, bool aceitaValorDivergente = false, string descricaoObservacao = null, DateTime? dataPagamento = null, int personType = 1, CancellationToken cancellationToken = default)
-        {
-            var consulta = await ConsultarBoletoAsync(codigoBarras, numeroConta, dataPagamento, cancellationToken).ConfigureAwait(false);
             if (consulta == null)
-            {
-                return BancoBr.API.Base.Models.PagamentoBoletoResultado.NaoEncontrado();
-            }
+                return AplicarBoletoNaoEncontrado(movimento);
+
+            AplicarConsulta(movimento, item, consulta);
 
             if (consulta.BloquearPagamento)
-            {
-                return BancoBr.API.Base.Models.PagamentoBoletoResultado.Bloqueado(consulta.MensagemBloqueioPagamento);
-            }
+                AplicarBloqueio(movimento, consulta.MensagemBloqueioPagamento);
 
-            var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest
-            {
-                IdentificadorConsulta = consulta.IdentificadorConsulta,
-                ValorBoleto = consulta.ValorBoleto,
-                ValorDescontoAbatimento = consulta.ValorAbatimentoDesconto,
-                ValorMultaMora = consulta.ValorMultaMora,
-                DescricaoObservacao = descricaoObservacao,
-                AceitaValorDivergente = aceitaValorDivergente,
-                NumeroCpfCnpjPortador = numeroCpfCnpjPortador,
-                NomePortador = nomePortador,
-                Amount = consulta.ValorPagamento,
-                Date = dataPagamento ?? consulta.DataPagamento,
-                DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount
-                {
-                    Issuer = numeroAgencia,
-                    Number = numeroConta,
-                    AccountType = 0,
-                    PersonType = personType,
-                },
-            };
-
-            var idempotencyKey = IdempotencyKey.New(numeroAgencia, numeroConta, idLancamento);
-            return await PagarBoletoAsync(codigoBarras, request, idempotencyKey, cancellationToken).ConfigureAwait(false);
+            return movimento;
         }
 
-        public override async Task<IReadOnlyList<BancoBr.API.Base.Models.PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<BancoBr.API.Base.Models.PagamentoBoletoLoteItem> itens, CancellationToken cancellationToken = default)
+        public override async Task<Movimento> PagarBoletoComConsultaAsync(Movimento movimento, Correntista origem, Guid idLancamento, CancellationToken cancellationToken = default)
         {
-            var resultados = new List<BancoBr.API.Base.Models.PagamentoBoletoLoteResultadoItem>();
+            var item = ExtrairItem(movimento);
+            if (origem == null) throw new ArgumentNullException(nameof(origem));
+
+            var consulta = await ConsultarBoletoWireAsync(item.CodigoBarras, origem.NumeroConta, DataPagamentoOuNulo(movimento), cancellationToken)
+                .ConfigureAwait(false);
+
+            if (consulta == null)
+                return AplicarBoletoNaoEncontrado(movimento);
+
+            AplicarConsulta(movimento, item, consulta);
+
+            if (consulta.BloquearPagamento)
+                return AplicarBloqueio(movimento, consulta.MensagemBloqueioPagamento);
+
+            var idempotencyKey = IdempotencyKey.New(origem.NumeroAgencia, origem.NumeroConta, idLancamento);
+            return await PagarBoletoAsync(movimento, origem, idempotencyKey, cancellationToken).ConfigureAwait(false);
+        }
+
+        public override async Task<IReadOnlyList<Base.Models.PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<(Movimento Movimento, Guid IdLancamento)> itens, Correntista origem, CancellationToken cancellationToken = default)
+        {
+            if (itens == null) throw new ArgumentNullException(nameof(itens));
+
+            var resultados = new List<Base.Models.PagamentoBoletoLoteResultadoItem>();
 
             foreach (var item in itens)
             {
                 try
                 {
-                    var resultado = await PagarBoletoComConsultaAsync(
-                        item.CodigoBarras,
-                        item.NumeroConta,
-                        item.NumeroAgencia,
-                        item.IdLancamento,
-                        item.NumeroCpfCnpjPortador,
-                        item.NomePortador,
-                        item.AceitaValorDivergente,
-                        item.DescricaoObservacao,
-                        item.DataPagamento,
-                        item.PersonType,
-                        cancellationToken).ConfigureAwait(false);
+                    var movimento = await PagarBoletoComConsultaAsync(item.Movimento, origem, item.IdLancamento, cancellationToken).ConfigureAwait(false);
 
-                    resultados.Add(BancoBr.API.Base.Models.PagamentoBoletoLoteResultadoItem.ComSucesso(item, resultado));
+                    resultados.Add(Base.Models.PagamentoBoletoLoteResultadoItem.ComSucesso(movimento, item.IdLancamento));
                 }
                 catch (OperationCanceledException)
                 {
@@ -192,28 +183,34 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 }
                 catch (Exception ex)
                 {
-                    resultados.Add(BancoBr.API.Base.Models.PagamentoBoletoLoteResultadoItem.ComFalha(item, ex));
+                    resultados.Add(Base.Models.PagamentoBoletoLoteResultadoItem.ComFalha(item.Movimento, item.IdLancamento, ex));
                 }
             }
 
             return resultados;
         }
 
-        public override async Task<BancoBr.API.Base.Models.PagamentoBoletoResultado> PagarBoletoAsync(string codigoBarras, BancoBr.API.Base.Models.BoletoPagamentoRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+        public override async Task<Movimento> PagarBoletoAsync(Movimento movimento, Correntista origem, string idempotencyKey, CancellationToken cancellationToken = default)
         {
-            var url = $"{_baseUrl}boletos/pagamentos/{codigoBarras.JustNumbers()}";
-            var json = JsonConvert.SerializeObject(MapToSicoob(request), SerializerSettings);
+            var item = ExtrairItem(movimento);
+            if (origem == null) throw new ArgumentNullException(nameof(origem));
+
+            var url = $"{_baseUrl}boletos/pagamentos/{(item.CodigoBarras ?? string.Empty).JustNumbers()}";
+            var json = JsonConvert.SerializeObject(MontarRequisicaoPagamento(movimento, item, origem), SerializerSettings);
 
             using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Post, url, json, idempotencyKey), cancellationToken).ConfigureAwait(false))
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.Accepted)
                 {
-                    return BancoBr.API.Base.Models.PagamentoBoletoResultado.PendenteDeAssinatura();
+                    movimento.SituacaoBancoBr = BancoBrSituacaoEnum.Agendado;
+                    movimento.DetalheRejeicaoBancoBr = "Pagamento pendente de assinatura.";
+                    return movimento;
                 }
 
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                 {
-                    return BancoBr.API.Base.Models.PagamentoBoletoResultado.SemConteudo();
+                    movimento.SituacaoBancoBr = BancoBrSituacaoEnum.Efetivado;
+                    return movimento;
                 }
 
                 try
@@ -222,181 +219,72 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 }
                 catch (SicoobApiException ex) when (ex.Mensagens.Any(m => m.Codigo == SicoobErrorCodes.IdempotencyJaUtilizado))
                 {
-                    var comprovanteExistente = await ConsultarComprovantePorIdempotencyAsync(idempotencyKey, cancellationToken).ConfigureAwait(false);
-                    return BancoBr.API.Base.Models.PagamentoBoletoResultado.Efetivado(comprovanteExistente);
+                    // O pagamento já foi efetivado numa tentativa anterior com a mesma
+                    // idempotency key; o comprovante é recuperado em vez de propagar o erro.
+                    var comprovanteExistente = await ConsultarComprovanteWireAsync($"{_baseUrl}boletos/pagamentos/{idempotencyKey}/idempotency/comprovantes", cancellationToken).ConfigureAwait(false);
+                    return AplicarComprovante(movimento, item, comprovanteExistente);
                 }
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var envelope = JsonConvert.DeserializeObject<ResultadoEnvelope<ComprovantePagamento>>(body, SerializerSettings);
-                return BancoBr.API.Base.Models.PagamentoBoletoResultado.Efetivado(MapToAgnostic(envelope.Resultado));
+                return AplicarComprovante(movimento, item, envelope?.Resultado);
             }
         }
 
-        public override async Task<BancoBr.API.Base.Models.ComprovantePagamento> ConsultarComprovantePorIdAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
+        public override async Task<Movimento> ConsultarComprovantePorIdAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
         {
-            var url = $"{_baseUrl}boletos/pagamentos/{idPagamento}/comprovantes?numeroConta={numeroConta}";
-            var resultado = await SendAsync<ComprovantePagamento>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
-                .ConfigureAwait(false);
-            return MapToAgnostic(resultado);
+            var item = ExtrairItem(movimento);
+            if (origem == null) throw new ArgumentNullException(nameof(origem));
+
+            if (string.IsNullOrWhiteSpace(movimento.NumeroDocumentoNoBanco))
+                throw new InvalidOperationException("Para consultar o comprovante, o movimento precisa ter o IdPagamento em NumeroDocumentoNoBanco.");
+
+            var url = $"{_baseUrl}boletos/pagamentos/{movimento.NumeroDocumentoNoBanco}/comprovantes?numeroConta={origem.NumeroConta}";
+            var comprovante = await ConsultarComprovanteWireAsync(url, cancellationToken).ConfigureAwait(false);
+
+            return AplicarComprovante(movimento, item, comprovante);
         }
 
-        public override async Task CancelarAgendamentoAsync(long idPagamento, long numeroConta, CancellationToken cancellationToken = default)
+        public override async Task<Movimento> CancelarAgendamentoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
         {
-            var url = $"{_baseUrl}boletos/pagamentos/agendamentos/{idPagamento}";
-            var json = JsonConvert.SerializeObject(new CancelamentoRequest { NumeroConta = numeroConta }, SerializerSettings);
+            if (movimento == null) throw new ArgumentNullException(nameof(movimento));
+            if (origem == null) throw new ArgumentNullException(nameof(origem));
+
+            if (string.IsNullOrWhiteSpace(movimento.NumeroDocumentoNoBanco))
+                throw new InvalidOperationException("Para cancelar o agendamento, o movimento precisa ter o IdPagamento em NumeroDocumentoNoBanco.");
+
+            var url = $"{_baseUrl}boletos/pagamentos/agendamentos/{movimento.NumeroDocumentoNoBanco}";
+            var json = JsonConvert.SerializeObject(new CancelamentoRequest { NumeroConta = origem.NumeroConta }, SerializerSettings);
 
             using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Delete, url, json, idempotencyKey: null), cancellationToken).ConfigureAwait(false))
             {
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
             }
+
+            movimento.SituacaoBancoBr = BancoBrSituacaoEnum.Cancelado;
+            movimento.DetalheRejeicaoBancoBr = "Agendamento cancelado.";
+
+            return movimento;
         }
 
-        public override async Task<BancoBr.API.Base.Models.ComprovantePagamento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default)
+        public override async Task<Movimento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/{idempotencyKey}/idempotency/comprovantes";
-            var resultado = await SendAsync<ComprovantePagamento>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
-                .ConfigureAwait(false);
-            return MapToAgnostic(resultado);
-        }
+            var comprovante = await ConsultarComprovanteWireAsync(url, cancellationToken).ConfigureAwait(false);
 
-        private static BancoBr.API.Base.Models.BoletoConsultaResponse MapToAgnostic(BoletoConsultaResponse sicoob)
-        {
-            if (sicoob == null) return null;
+            if (comprovante == null)
+                return null;
 
-            return new BancoBr.API.Base.Models.BoletoConsultaResponse
+            var movimento = new Movimento
             {
-                NumeroInstituicaoEmissora = sicoob.NumeroInstituicaoEmissora,
-                NomeInstituicaoEmissora = sicoob.NomeInstituicaoEmissora,
-                TipoPessoaBeneficiario = sicoob.TipoPessoaBeneficiario,
-                NumeroCpfCnpjBeneficiario = sicoob.NumeroCpfCnpjBeneficiario,
-                NomeRazaoSocialBeneficiario = sicoob.NomeRazaoSocialBeneficiario,
-                NomeFantasiaBeneficiario = sicoob.NomeFantasiaBeneficiario,
-                TipoPessoaPagador = sicoob.TipoPessoaPagador,
-                NumeroCpfCnpjPagador = sicoob.NumeroCpfCnpjPagador,
-                NomeRazaoSocialPagador = sicoob.NomeRazaoSocialPagador,
-                CodigoBarras = sicoob.CodigoBarras,
-                NumeroLinhaDigitavel = sicoob.NumeroLinhaDigitavel,
-                DataVencimentoBoleto = sicoob.DataVencimentoBoleto,
-                DataLimitePagamentoBoleto = sicoob.DataLimitePagamentoBoleto,
-                ValorBoleto = sicoob.ValorBoleto,
-                ValorAbatimentoDesconto = sicoob.ValorAbatimentoDesconto,
-                ValorMultaMora = sicoob.ValorMultaMora,
-                ValorPagamento = sicoob.ValorPagamento,
-                DataPagamento = sicoob.DataPagamento,
-                PermiteAlterarValor = sicoob.PermiteAlterarValor,
-                ConsultaEmContingencia = sicoob.ConsultaEmContingencia,
-                CodigoEspecieDocumento = sicoob.CodigoEspecieDocumento,
-                CodigoSituacaoBoletoPagamento = sicoob.CodigoSituacaoBoletoPagamento,
-                NossoNumero = sicoob.NossoNumero,
-                NumeroDocumento = sicoob.NumeroDocumento,
-                IdentificadorConsulta = sicoob.IdentificadorConsulta,
-                DescricaoInstrucaoValorMinMax = sicoob.DescricaoInstrucaoValorMinMax,
-                BloquearPagamento = sicoob.BloquearPagamento,
-                MensagemBloqueioPagamento = sicoob.MensagemBloqueioPagamento,
+                TipoLancamento = TipoLancamentoEnum.PagamentoTituloOutroBanco,
+                MovimentoItem = new MovimentoItemPagamentoTituloCodigoBarra(),
             };
+
+            return AplicarComprovante(movimento, (MovimentoItemPagamentoTituloCodigoBarra)movimento.MovimentoItem, comprovante);
         }
 
-        private static BancoBr.API.Base.Models.ComprovantePagamento MapToAgnostic(ComprovantePagamento sicoob)
-        {
-            if (sicoob == null) return null;
-
-            return new BancoBr.API.Base.Models.ComprovantePagamento
-            {
-                NumeroAgencia = sicoob.NumeroAgencia,
-                NomeAgencia = sicoob.NomeAgencia,
-                NumeroConta = sicoob.NumeroConta,
-                NomeProprietarioContaCorrente = sicoob.NomeProprietarioContaCorrente,
-                NumeroLinhaDigitavel = sicoob.NumeroLinhaDigitavel,
-                NumeroInstituicaoEmissora = sicoob.NumeroInstituicaoEmissora,
-                NomeInstituicaoEmissora = sicoob.NomeInstituicaoEmissora,
-                NumeroCpfCnpjBeneficiario = sicoob.NumeroCpfCnpjBeneficiario,
-                NomeRazaoSocialBeneficiario = sicoob.NomeRazaoSocialBeneficiario,
-                NumeroCpfCnpjPagador = sicoob.NumeroCpfCnpjPagador,
-                NomeRazaoSocialPagador = sicoob.NomeRazaoSocialPagador,
-                DataVencimento = sicoob.DataVencimento,
-                ValorBoleto = sicoob.ValorBoleto,
-                ValorAbatimentoDesconto = sicoob.ValorAbatimentoDesconto,
-                ValorMultaMora = sicoob.ValorMultaMora,
-                ValorPagamento = sicoob.ValorPagamento,
-                DataPagamento = sicoob.DataPagamento,
-                SituacaoPagamento = sicoob.SituacaoPagamento,
-                BancoBrSituacao = MapSituacaoPagamentoParaSituacao(sicoob.SituacaoPagamento),
-                DescricaoDetalheSituacao = sicoob.DescricaoDetalheSituacao,
-                DataHoraCadastro = sicoob.DataHoraCadastro,
-                AceitaValorDivergente = sicoob.AceitaValorDivergente,
-                NossoNumero = sicoob.NossoNumero,
-                NumeroDocumento = sicoob.NumeroDocumento,
-                DescricaoObservacao = sicoob.DescricaoObservacao,
-                DescricaoOuvidoria = sicoob.DescricaoOuvidoria,
-                DescricaoTituloComprovante = sicoob.DescricaoTituloComprovante,
-                IdPagamento = sicoob.IdPagamento,
-                NumeroAutenticacaoPagamento = sicoob.NumeroAutenticacaoPagamento,
-            };
-        }
-
-        /// <summary>
-        /// ATENÇÃO: mapeamento best-effort do campo textual "situacaoPagamento" retornado pela API
-        /// de Pagamento de Boletos do Sicoob para o enum agnóstico
-        /// <see cref="BancoBr.API.Base.Models.BancoBrSituacaoEnum"/>. O único valor confirmado em
-        /// testes/documentação disponível neste repositório é "Efetivado". Os demais valores abaixo
-        /// foram inferidos a partir do vocabulário plausível de status de pagamento de boleto e NÃO
-        /// estão confirmados — DEVEM SER VALIDADOS/AJUSTADOS contra respostas reais do
-        /// sandbox/produção do Sicoob antes de confiar neste mapeamento. Qualquer valor não
-        /// reconhecido cai em NaoIntegrado, para nunca reportar falsamente Efetivado/Cancelado.
-        /// </summary>
-        private static BancoBr.API.Base.Models.BancoBrSituacaoEnum MapSituacaoPagamentoParaSituacao(string situacaoPagamento)
-        {
-            switch (situacaoPagamento?.Trim().ToUpperInvariant())
-            {
-                case "EFETIVADO":
-                case "PAGO":
-                case "LIQUIDADO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Efetivado;
-
-                case "AGENDADO":
-                case "EM_PROCESSAMENTO":
-                case "PROCESSANDO":
-                case "PENDENTE":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Agendado;
-
-                case "CANCELADO":
-                case "NAO_EFETIVADO":
-                case "DEVOLVIDO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Cancelado;
-
-                case "REJEITADO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Rejeitado;
-
-                default:
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.NaoIntegrado;
-            }
-        }
-
-        private static BoletoPagamentoRequest MapToSicoob(BancoBr.API.Base.Models.BoletoPagamentoRequest agnostico)
-        {
-            return new BoletoPagamentoRequest
-            {
-                IdentificadorConsulta = agnostico.IdentificadorConsulta,
-                ValorBoleto = agnostico.ValorBoleto,
-                ValorDescontoAbatimento = agnostico.ValorDescontoAbatimento,
-                ValorMultaMora = agnostico.ValorMultaMora,
-                DescricaoObservacao = agnostico.DescricaoObservacao,
-                AceitaValorDivergente = agnostico.AceitaValorDivergente,
-                NumeroCpfCnpjPortador = agnostico.NumeroCpfCnpjPortador?.Replace(".", "").Replace("-", "").Replace("/", ""),
-                NomePortador = agnostico.NomePortador,
-                Amount = agnostico.Amount,
-                Date = agnostico.Date,
-                DebtorAccount = agnostico.DebtorAccount == null ? null : new DebtorAccount
-                {
-                    Issuer = agnostico.DebtorAccount.Issuer,
-                    Number = agnostico.DebtorAccount.Number,
-                    AccountType = agnostico.DebtorAccount.AccountType,
-                    PersonType = agnostico.DebtorAccount.PersonType,
-                },
-            };
-        }
-
-        public override async Task<System.Collections.Generic.IReadOnlyList<BancoBr.API.Base.Models.BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, BancoBr.API.Base.Models.SituacaoBoletoEnum situacao, BancoBr.API.Base.Models.TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)
+        public override async Task<IReadOnlyList<Base.Models.BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, Base.Models.SituacaoBoletoEnum situacao, Base.Models.TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos?numeroConta={numeroConta}&dataInicial={dataInicial:yyyy-MM-dd}&dataFinal={dataFinal:yyyy-MM-dd}&situacao={(int)situacao}&tipoData={(int)tipoData}";
 
@@ -404,7 +292,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                 {
-                    return Array.Empty<BancoBr.API.Base.Models.BoletoDDA>();
+                    return Array.Empty<Base.Models.BoletoDDA>();
                 }
 
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
@@ -415,7 +303,257 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             }
         }
 
-        private static BancoBr.API.Base.Models.BoletoDDA MapBoletoDda(BoletoDDA dto) => new BancoBr.API.Base.Models.BoletoDDA
+        #endregion
+
+        #region ::. Chamadas de wire (DTOs do Sicoob) .::
+
+        private async Task<BoletoConsultaResponse> ConsultarBoletoWireAsync(string codigoBarras, long numeroConta, DateTime? dataPagamento, CancellationToken cancellationToken)
+        {
+            var url = $"{_baseUrl}boletos/{(codigoBarras ?? string.Empty).JustNumbers()}?numeroConta={numeroConta}";
+            if (dataPagamento.HasValue)
+            {
+                url += $"&dataPagamento={dataPagamento.Value:yyyy-MM-dd}";
+            }
+
+            return await SendAsync<BoletoConsultaResponse>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        private async Task<ComprovantePagamento> ConsultarComprovanteWireAsync(string url, CancellationToken cancellationToken) =>
+            await SendAsync<ComprovantePagamento>(HttpMethod.Get, url, body: null, idempotencyKey: null, cancellationToken).ConfigureAwait(false);
+
+        #endregion
+
+        #region ::. Mapeamento Movimento <-> Sicoob .::
+
+        private static MovimentoItemPagamentoTituloCodigoBarra ExtrairItem(Movimento movimento)
+        {
+            if (movimento == null) throw new ArgumentNullException(nameof(movimento));
+
+            var item = movimento.MovimentoItem as MovimentoItemPagamentoTituloCodigoBarra;
+            if (item == null)
+                throw new InvalidOperationException("As operações de boleto esperam um MovimentoItemPagamentoTituloCodigoBarra em Movimento.MovimentoItem.");
+
+            return item;
+        }
+
+        private static DateTime? DataPagamentoOuNulo(Movimento movimento) =>
+            movimento.DataPagamento == default(DateTime) ? (DateTime?)null : movimento.DataPagamento;
+
+        /// <summary>
+        /// O boleto não foi localizado pelo banco (204 sem conteúdo). Antes desta migração isto
+        /// era um booleano dedicado (PagamentoBoletoResultado.BoletoNaoEncontrado); agora é
+        /// expresso via situação + detalhe, sem perda de informação.
+        /// </summary>
+        private static Movimento AplicarBoletoNaoEncontrado(Movimento movimento)
+        {
+            movimento.SituacaoBancoBr = BancoBrSituacaoEnum.Cancelado;
+            movimento.DetalheRejeicaoBancoBr = "Boleto não encontrado.";
+            return movimento;
+        }
+
+        /// <summary>
+        /// O banco bloqueou o pagamento deste boleto — antes um booleano dedicado
+        /// (PagamentoBoletoResultado.PagamentoBloqueado), hoje situação + detalhe.
+        /// </summary>
+        private static Movimento AplicarBloqueio(Movimento movimento, string mensagemBloqueio)
+        {
+            movimento.SituacaoBancoBr = BancoBrSituacaoEnum.Cancelado;
+            movimento.DetalheRejeicaoBancoBr = mensagemBloqueio;
+            return movimento;
+        }
+
+        private static void AplicarConsulta(Movimento movimento, MovimentoItemPagamentoTituloCodigoBarra item, BoletoConsultaResponse consulta)
+        {
+            item.BancoCodigoBarra = consulta.NumeroInstituicaoEmissora;
+            item.NomeInstituicaoEmissora = consulta.NomeInstituicaoEmissora;
+
+            if (!string.IsNullOrWhiteSpace(consulta.CodigoBarras))
+                item.CodigoBarras = consulta.CodigoBarras;
+
+            item.NumeroLinhaDigitavel = consulta.NumeroLinhaDigitavel;
+            item.DataVencimento = consulta.DataVencimentoBoleto;
+            item.DataLimitePagamento = consulta.DataLimitePagamentoBoleto;
+            item.ValorCodigoBarra = consulta.ValorBoleto;
+            item.Desconto = consulta.ValorAbatimentoDesconto;
+            item.Acrescimo = consulta.ValorMultaMora;
+            item.PermiteAlterarValor = consulta.PermiteAlterarValor;
+            item.ConsultaEmContingencia = consulta.ConsultaEmContingencia;
+            item.CodigoEspecieDocumento = consulta.CodigoEspecieDocumento;
+            item.CodigoSituacaoBoletoPagamento = consulta.CodigoSituacaoBoletoPagamento;
+            item.NossoNumero = consulta.NossoNumero;
+            item.NumeroDocumentoTitulo = consulta.NumeroDocumento;
+            item.IdentificadorConsulta = consulta.IdentificadorConsulta;
+            item.DescricaoInstrucaoValorMinMax = consulta.DescricaoInstrucaoValorMinMax;
+            item.NomeFantasiaBeneficiario = consulta.NomeFantasiaBeneficiario;
+
+            item.PagadorConfirmadoNome = consulta.NomeRazaoSocialPagador;
+            item.PagadorConfirmadoDocumento = consulta.NumeroCpfCnpjPagador;
+            item.PagadorConfirmadoTipoPessoa = consulta.TipoPessoaPagador;
+
+            AplicarBeneficiario(movimento, consulta.NomeRazaoSocialBeneficiario, consulta.NumeroCpfCnpjBeneficiario, consulta.TipoPessoaBeneficiario);
+
+            movimento.ValorPagamento = consulta.ValorPagamento;
+
+            // Só assume a data devolvida pelo banco quando o chamador não fixou uma — o
+            // comportamento anterior (dataPagamento ?? consulta.DataPagamento) dava precedência
+            // à data pedida pelo ERP.
+            if (movimento.DataPagamento == default(DateTime))
+                movimento.DataPagamento = consulta.DataPagamento;
+        }
+
+        private static Movimento AplicarComprovante(Movimento movimento, MovimentoItemPagamentoTituloCodigoBarra item, ComprovantePagamento comprovante)
+        {
+            if (comprovante == null)
+                return movimento;
+
+            movimento.NumeroDocumentoNoBanco = comprovante.IdPagamento.ToString();
+            movimento.SituacaoBancoBr = MapSituacaoPagamentoParaSituacao(comprovante.SituacaoPagamento);
+            movimento.DetalheRejeicaoBancoBr = comprovante.DescricaoDetalheSituacao;
+            movimento.HorarioBancoBr = comprovante.DataHoraCadastro;
+
+            if (comprovante.ValorPagamento != 0)
+                movimento.ValorPagamento = comprovante.ValorPagamento;
+
+            if (comprovante.DataPagamento != default(DateTime))
+                movimento.DataPagamento = comprovante.DataPagamento;
+
+            item.BancoCodigoBarra = comprovante.NumeroInstituicaoEmissora;
+            item.NomeInstituicaoEmissora = comprovante.NomeInstituicaoEmissora;
+            item.NumeroLinhaDigitavel = comprovante.NumeroLinhaDigitavel;
+
+            if (comprovante.DataVencimento != default(DateTime))
+                item.DataVencimento = comprovante.DataVencimento;
+
+            item.ValorCodigoBarra = comprovante.ValorBoleto;
+            item.Desconto = comprovante.ValorAbatimentoDesconto;
+            item.Acrescimo = comprovante.ValorMultaMora;
+            item.AceitaValorDivergente = comprovante.AceitaValorDivergente;
+            item.NossoNumero = comprovante.NossoNumero;
+            item.NumeroDocumentoTitulo = comprovante.NumeroDocumento;
+            item.DescricaoObservacao = comprovante.DescricaoObservacao;
+            item.DescricaoOuvidoria = comprovante.DescricaoOuvidoria;
+            item.DescricaoTituloComprovante = comprovante.DescricaoTituloComprovante;
+            item.NumeroAutenticacaoPagamento = comprovante.NumeroAutenticacaoPagamento;
+            item.NomeAgencia = comprovante.NomeAgencia;
+            item.NomeProprietarioContaCorrente = comprovante.NomeProprietarioContaCorrente;
+
+            item.PagadorConfirmadoNome = comprovante.NomeRazaoSocialPagador;
+            item.PagadorConfirmadoDocumento = comprovante.NumeroCpfCnpjPagador;
+
+            AplicarBeneficiario(movimento, comprovante.NomeRazaoSocialBeneficiario, comprovante.NumeroCpfCnpjBeneficiario, tipoPessoa: null);
+
+            return movimento;
+        }
+
+        /// <summary>
+        /// Preenche o <see cref="Favorecido"/> com a identidade do beneficiário confirmada pelo
+        /// banco, sem apagar o que o ERP já tinha quando o banco não devolve o campo.
+        /// </summary>
+        private static void AplicarBeneficiario(Movimento movimento, string nome, string documento, string tipoPessoa)
+        {
+            if (string.IsNullOrWhiteSpace(nome) && string.IsNullOrWhiteSpace(documento))
+                return;
+
+            if (movimento.Favorecido == null)
+                movimento.Favorecido = new Favorecido();
+
+            if (!string.IsNullOrWhiteSpace(nome))
+                movimento.Favorecido.Nome = nome;
+
+            if (!string.IsNullOrWhiteSpace(documento))
+            {
+                movimento.Favorecido.CPF_CNPJ = documento;
+                movimento.Favorecido.TipoPessoa = MapTipoPessoa(tipoPessoa, documento);
+            }
+        }
+
+        /// <summary>
+        /// ATENÇÃO: o Sicoob devolve "tipoPessoaBeneficiario"/"tipoPessoaPagador" como texto e o
+        /// conjunto exato de valores não está confirmado em documentação disponível neste
+        /// repositório. Reconhecemos os vocabulários plausíveis ("1"/"2" no padrão Febraban e
+        /// variantes de "FISICA"/"JURIDICA") e, para qualquer outro valor, caímos na inferência
+        /// pelo tamanho do documento (11 dígitos = CPF, 14 = CNPJ) — determinística e segura.
+        /// O valor textual original fica preservado em
+        /// <see cref="MovimentoItemPagamentoTituloCodigoBarra.PagadorConfirmadoTipoPessoa"/>.
+        /// </summary>
+        private static TipoInscricaoCPFCNPJEnum MapTipoPessoa(string tipoPessoa, string documento)
+        {
+            var normalizado = tipoPessoa?.Trim().ToUpperInvariant();
+
+            if (normalizado == "1" || (normalizado != null && normalizado.Contains("FISICA")) || (normalizado != null && normalizado.Contains("FÍSICA")))
+                return TipoInscricaoCPFCNPJEnum.CPF;
+
+            if (normalizado == "2" || (normalizado != null && normalizado.Contains("JURIDICA")) || (normalizado != null && normalizado.Contains("JURÍDICA")))
+                return TipoInscricaoCPFCNPJEnum.CNPJ;
+
+            var digitos = (documento ?? string.Empty).JustNumbers();
+            return digitos.Length > 11 ? TipoInscricaoCPFCNPJEnum.CNPJ : TipoInscricaoCPFCNPJEnum.CPF;
+        }
+
+        private static BoletoPagamentoRequest MontarRequisicaoPagamento(Movimento movimento, MovimentoItemPagamentoTituloCodigoBarra item, Correntista origem)
+        {
+            return new BoletoPagamentoRequest
+            {
+                IdentificadorConsulta = item.IdentificadorConsulta,
+                ValorBoleto = item.ValorCodigoBarra,
+                ValorDescontoAbatimento = item.Desconto,
+                ValorMultaMora = item.Acrescimo,
+                DescricaoObservacao = item.DescricaoObservacao,
+                AceitaValorDivergente = item.AceitaValorDivergente,
+                NumeroCpfCnpjPortador = origem.CPF_CNPJ.RemoveMascaraCpfCnpj(),
+                NomePortador = origem.Nome,
+                Amount = movimento.ValorPagamento,
+                Date = movimento.DataPagamento,
+                DebtorAccount = new DebtorAccount
+                {
+                    Issuer = origem.NumeroAgencia,
+                    Number = origem.NumeroConta,
+                    AccountType = TipoContaCorrente,
+                    PersonType = origem.TipoPessoa == TipoInscricaoCPFCNPJEnum.CNPJ ? 1 : 0,
+                },
+            };
+        }
+
+        /// <summary>
+        /// ATENÇÃO: mapeamento best-effort do campo textual "situacaoPagamento" retornado pela API
+        /// de Pagamento de Boletos do Sicoob para o enum agnóstico
+        /// <see cref="BancoBrSituacaoEnum"/>. O único valor confirmado em
+        /// testes/documentação disponível neste repositório é "Efetivado". Os demais valores abaixo
+        /// foram inferidos a partir do vocabulário plausível de status de pagamento de boleto e NÃO
+        /// estão confirmados — DEVEM SER VALIDADOS/AJUSTADOS contra respostas reais do
+        /// sandbox/produção do Sicoob antes de confiar neste mapeamento. Qualquer valor não
+        /// reconhecido cai em NaoIntegrado, para nunca reportar falsamente Efetivado/Cancelado.
+        /// </summary>
+        private static BancoBrSituacaoEnum MapSituacaoPagamentoParaSituacao(string situacaoPagamento)
+        {
+            switch (situacaoPagamento?.Trim().ToUpperInvariant())
+            {
+                case "EFETIVADO":
+                case "PAGO":
+                case "LIQUIDADO":
+                    return BancoBrSituacaoEnum.Efetivado;
+
+                case "AGENDADO":
+                case "EM_PROCESSAMENTO":
+                case "PROCESSANDO":
+                case "PENDENTE":
+                    return BancoBrSituacaoEnum.Agendado;
+
+                case "CANCELADO":
+                case "NAO_EFETIVADO":
+                case "DEVOLVIDO":
+                    return BancoBrSituacaoEnum.Cancelado;
+
+                case "REJEITADO":
+                    return BancoBrSituacaoEnum.Rejeitado;
+
+                default:
+                    return BancoBrSituacaoEnum.NaoIntegrado;
+            }
+        }
+
+        private static Base.Models.BoletoDDA MapBoletoDda(BoletoDDA dto) => new Base.Models.BoletoDDA
         {
             DescricaoTipoPagador = dto.DescricaoTipoPagador,
             TipoPessoaBeneficiario = dto.TipoPessoaBeneficiario,
@@ -471,6 +609,10 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             CodigoIndicadorValorMinimo = dto.CodigoIndicadorValorMinimo,
             ValorPercentualMinimo = dto.ValorPercentualMinimo,
         };
+
+        #endregion
+
+        #region ::. Plumbing HTTP .::
 
         private async Task<T> SendAsync<T>(HttpMethod method, string url, string body, string idempotencyKey, CancellationToken cancellationToken)
         {
@@ -552,5 +694,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
 
             throw new SicoobApiException((int)response.StatusCode, errorResponse?.Mensagens ?? new System.Collections.Generic.List<SicoobMensagem>());
         }
+
+        #endregion
     }
 }

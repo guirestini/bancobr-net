@@ -11,6 +11,8 @@ using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
 using BancoBr.API.Sicoob.Pagamentos.Convenios.Models;
+using BancoBr.Common.Enums;
+using BancoBr.Common.Instances;
 using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Convenios
@@ -18,6 +20,12 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
     /// <summary>
     /// Cliente para a API "Convênios Pagamentos" do Sicoob, v2 — bloco de Arrecadação por
     /// código de barras (pagamento de convênios/tributos via código de barras).
+    ///
+    /// Esta classe é o limite de mapeamento entre o contrato público
+    /// (<see cref="Movimento"/>/<see cref="MovimentoItemPagamentoConvenioCodigoBarra"/>,
+    /// compartilhado com o CNAB) e os DTOs de wire do Sicoob (<c>Convenios.Models.*</c>,
+    /// detalhe de implementação) — mesmo papel que BancoBr.CNAB.Base.Banco tem para os
+    /// Segmentos, e igualmente por composição, nunca por herança.
     /// </summary>
     public class PagamentoConvenioClient : PagamentoConvenioApiBase
     {
@@ -106,9 +114,19 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             return new OAuthTokenProvider(tokenHttpClient, tokenOptions);
         }
 
-        public override async Task<BancoBr.API.Base.Models.ConvenioConsultaResponse> ConsultarCodigoBarrasAsync(string codigoBarras, DateTime dataPagamento, bool? recebimentoViaCaixa = null, CancellationToken cancellationToken = default)
+        #region ::. Operações .::
+
+        /// <summary>
+        /// <paramref name="origem"/> e <paramref name="unidade"/> não são enviados: o endpoint
+        /// de consulta do Sicoob (GET /arrecadacao/codigo-barras/{codigoBarras}) só aceita
+        /// dataPagamento e recebimentoViaCaixa. Ficam na assinatura por simetria com as demais
+        /// operações da família (e porque outros bancos podem exigi-los).
+        /// </summary>
+        public override async Task<Movimento> ConsultarCodigoBarrasAsync(Movimento movimento, Correntista origem, bool? recebimentoViaCaixa = null, int unidade = 0, CancellationToken cancellationToken = default)
         {
-            var url = $"{_baseUrl}arrecadacao/codigo-barras/{codigoBarras}?dataPagamento={dataPagamento:yyyy-MM-dd}";
+            var item = ExtrairItem(movimento);
+
+            var url = $"{_baseUrl}arrecadacao/codigo-barras/{item.CodigoBarra}?dataPagamento={movimento.DataPagamento:yyyy-MM-dd}";
             if (recebimentoViaCaixa.HasValue)
             {
                 url += $"&recebimentoViaCaixa={recebimentoViaCaixa.Value.ToString().ToLowerInvariant()}";
@@ -116,20 +134,48 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
 
             var dto = await SendAsync<ConvenioConsultaResponse>(HttpMethod.Get, url, body: null, cancellationToken)
                 .ConfigureAwait(false);
-            return MapConvenioConsultaResponse(dto);
+
+            if (dto == null)
+                return movimento;
+
+            item.Convenio = dto.Convenio;
+            item.SiglaConvenio = dto.SiglaConvenio;
+            item.ValorDocumento = dto.ValorDocumento;
+            item.ValorDesconto = dto.ValorDesconto;
+            item.ValorMulta = dto.ValorMulta;
+            item.ValorJuros = dto.ValorJuros;
+            item.ValorOutrosEncargos = dto.ValorOutrosEncargos;
+            item.CodigoConvenioFebraban = dto.CodigoConvenioFebraban;
+            item.Nsu = dto.Nsu;
+            item.Transacao = dto.Transacao;
+
+            if (recebimentoViaCaixa.HasValue)
+                item.RecebimentoViaCaixa = recebimentoViaCaixa;
+
+            movimento.ValorPagamento = dto.ValorTotal;
+
+            if (dto.Nsu.HasValue)
+                movimento.NumeroDocumentoNoBanco = dto.Nsu.Value.ToString();
+
+            return movimento;
         }
 
-        public override async Task<BancoBr.API.Base.Models.PagamentoConvenioResultado> PagarConvenioAsync(string codigoBarras, BancoBr.API.Base.Models.ArrecadacaoPagamentoRequest request, CancellationToken cancellationToken = default)
+        public override async Task<Movimento> PagarConvenioAsync(Movimento movimento, Correntista origem, int unidade = 0, CancellationToken cancellationToken = default)
         {
-            var url = $"{_baseUrl}arrecadacao/codigo-barras/{codigoBarras}/pagamentos";
-            var wireRequest = MapArrecadacaoPagamentoRequest(request);
+            var item = ExtrairItem(movimento);
+            if (origem == null) throw new ArgumentNullException(nameof(origem));
+
+            var url = $"{_baseUrl}arrecadacao/codigo-barras/{item.CodigoBarra}/pagamentos";
+            var wireRequest = MontarRequisicaoPagamento(movimento, item, origem, unidade);
             var json = JsonConvert.SerializeObject(wireRequest, SerializerSettings);
 
             using (var response = await SendWithAuthAsync(() => BuildRequest(HttpMethod.Post, url, json), cancellationToken).ConfigureAwait(false))
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.Accepted)
                 {
-                    return BancoBr.API.Base.Models.PagamentoConvenioResultado.PendenteDeAssinatura();
+                    movimento.SituacaoBancoBr = BancoBrSituacaoEnum.Agendado;
+                    movimento.DetalheRejeicaoBancoBr = "Pagamento pendente de assinatura.";
+                    return movimento;
                 }
 
                 try
@@ -138,12 +184,20 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
                 }
                 catch (SicoobApiException ex) when (ex.Mensagens.Any(m => m.Codigo == SicoobErrorCodes.IdempotencyJaUtilizado))
                 {
-                    return await RecuperarPagamentoJaEfetivadoAsync(codigoBarras, request, cancellationToken).ConfigureAwait(false);
+                    return await RecuperarPagamentoJaEfetivadoAsync(movimento, item, wireRequest, cancellationToken).ConfigureAwait(false);
                 }
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var envelope = JsonConvert.DeserializeObject<ResultadoEnvelope<ArrecadacaoResultado>>(body, SerializerSettings);
-                return BancoBr.API.Base.Models.PagamentoConvenioResultado.Efetivado(MapArrecadacaoResultado(envelope.Resultado));
+
+                if (envelope?.Resultado != null)
+                {
+                    item.ComprovanteBase64 = envelope.Resultado.Comprovante;
+                    AplicarArrecadacao(movimento, item, envelope.Resultado.Arrecadacao);
+                }
+
+                movimento.SituacaoBancoBr = BancoBrSituacaoEnum.Efetivado;
+                return movimento;
             }
         }
 
@@ -153,17 +207,17 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
         /// registrados para o código de barras na mesma data de movimento e filtrando pela mesma
         /// transação enviada no pedido original.
         /// </summary>
-        private async Task<BancoBr.API.Base.Models.PagamentoConvenioResultado> RecuperarPagamentoJaEfetivadoAsync(string codigoBarras, BancoBr.API.Base.Models.ArrecadacaoPagamentoRequest request, CancellationToken cancellationToken)
+        private async Task<Movimento> RecuperarPagamentoJaEfetivadoAsync(Movimento movimento, MovimentoItemPagamentoConvenioCodigoBarra item, ArrecadacaoPagamentoRequest wireRequest, CancellationToken cancellationToken)
         {
             var pagamentos = await ConsultarPagamentosAsync(
-                codigoBarras,
-                request.Identificacao.Instituicao,
-                request.Pagamento.DataPagamento,
-                request.Transacao,
+                item.CodigoBarra,
+                wireRequest.Identificacao.Instituicao,
+                wireRequest.Pagamento.DataPagamento,
+                wireRequest.Transacao,
                 cancellationToken).ConfigureAwait(false);
 
-            var item = pagamentos?.FirstOrDefault(p => p.Transacao == request.Transacao);
-            if (item == null)
+            var encontrado = pagamentos?.FirstOrDefault(p => p.Transacao == wireRequest.Transacao);
+            if (encontrado == null)
             {
                 throw new SicoobApiException((int)System.Net.HttpStatusCode.Conflict, new List<SicoobMensagem>
                 {
@@ -175,25 +229,32 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
                 });
             }
 
-            return BancoBr.API.Base.Models.PagamentoConvenioResultado.Efetivado(new BancoBr.API.Base.Models.ArrecadacaoResultado
-            {
-                Comprovante = null,
-                Arrecadacao = new BancoBr.API.Base.Models.Arrecadacao
-                {
-                    ValorPago = item.ValorPago,
-                    Nsu = item.Nsu,
-                    DataPagamento = item.DataPagamento,
-                    ValorDocumento = item.ValorDocumento,
-                    ValorDesconto = item.ValorDesconto,
-                    ValorJuros = item.ValorJuros,
-                    ValorMulta = item.ValorMulta,
-                    Autenticacao = item.Autenticacao,
-                    RecebimentoViaCaixa = item.RecebimentoViaCaixa,
-                },
-            });
+            // A consulta de pagamentos não devolve o PDF do comprovante — só os dados da
+            // arrecadação; o mesmo já valia antes desta migração (Comprovante = null).
+            movimento.ValorPagamento = encontrado.ValorPago;
+            movimento.DataPagamento = encontrado.DataPagamento;
+
+            if (encontrado.Nsu.HasValue)
+                movimento.NumeroDocumentoNoBanco = encontrado.Nsu.Value.ToString();
+
+            item.Nsu = encontrado.Nsu;
+            item.ValorDocumento = encontrado.ValorDocumento;
+            item.ValorDesconto = encontrado.ValorDesconto;
+            item.ValorJuros = encontrado.ValorJuros;
+            item.ValorMulta = encontrado.ValorMulta;
+            item.Autenticacao = encontrado.Autenticacao;
+            item.RecebimentoViaCaixa = encontrado.RecebimentoViaCaixa;
+            item.IdentificadorFgts = encontrado.IdentificadorFgts;
+            item.AnoExercicio = encontrado.AnoExercicio;
+            item.Convenio = encontrado.Convenio;
+            item.SiglaConvenio = encontrado.SiglaConvenio;
+            item.Transacao = encontrado.Transacao;
+
+            movimento.SituacaoBancoBr = BancoBrSituacaoEnum.Efetivado;
+            return movimento;
         }
 
-        public override async Task<IReadOnlyList<BancoBr.API.Base.Models.ArrecadacaoConsultaItem>> ConsultarPagamentosAsync(string codigoBarras, long instituicao, DateTime dataMovimento, long? transacao = null, CancellationToken cancellationToken = default)
+        public override async Task<IReadOnlyList<Base.Models.ArrecadacaoConsultaItem>> ConsultarPagamentosAsync(string codigoBarras, long instituicao, DateTime dataMovimento, long? transacao = null, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}arrecadacao/codigo-barras/{codigoBarras}/pagamentos?instituicao={instituicao}&dataMovimento={dataMovimento:yyyy-MM-dd}";
             if (transacao.HasValue)
@@ -206,19 +267,27 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             return itens?.Select(MapArrecadacaoConsultaItem).ToList();
         }
 
-        public override async Task<BancoBr.API.Base.Models.ComprovanteArrecadacao> ConsultarComprovantePorNsuAsync(long nsu, long instituicao, CancellationToken cancellationToken = default)
+        public override async Task<Movimento> ConsultarComprovantePorNsuAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
         {
-            var url = $"{_baseUrl}arrecadacao/pagamentos/{nsu}/comprovante?instituicao={instituicao}";
+            var item = ExtrairItem(movimento);
+            if (origem == null) throw new ArgumentNullException(nameof(origem));
+
+            var nsu = ObterNsu(movimento, item);
+
+            var url = $"{_baseUrl}arrecadacao/pagamentos/{nsu}/comprovante?instituicao={origem.NumeroAgencia}";
             var dto = await SendAsync<ComprovanteArrecadacao>(HttpMethod.Get, url, body: null, cancellationToken)
                 .ConfigureAwait(false);
-            return dto == null ? null : new BancoBr.API.Base.Models.ComprovanteArrecadacao
-            {
-                Comprovante = dto.Comprovante,
-                Pagamento = MapArrecadacao(dto.Pagamento),
-            };
+
+            if (dto == null)
+                return movimento;
+
+            item.ComprovanteBase64 = dto.Comprovante;
+            AplicarArrecadacao(movimento, item, dto.Pagamento);
+
+            return movimento;
         }
 
-        public override async Task<IReadOnlyList<BancoBr.API.Base.Models.ConciliacaoItem>> ConsultarConciliacoesAsync(long instituicao, DateTime dataMovimento, int? unidade = null, CancellationToken cancellationToken = default)
+        public override async Task<IReadOnlyList<Base.Models.ConciliacaoItem>> ConsultarConciliacoesAsync(long instituicao, DateTime dataMovimento, int? unidade = null, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}arrecadacao/conciliacoes?dataMovimento={dataMovimento:yyyy-MM-dd}&instituicao={instituicao}";
             if (unidade.HasValue)
@@ -228,7 +297,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
 
             var itens = await SendAsync<List<ConciliacaoItem>>(HttpMethod.Get, url, body: null, cancellationToken)
                 .ConfigureAwait(false);
-            return itens?.Select(dto => new BancoBr.API.Base.Models.ConciliacaoItem
+            return itens?.Select(dto => new Base.Models.ConciliacaoItem
             {
                 Situacao = dto.Situacao,
                 Convenio = dto.Convenio,
@@ -238,12 +307,12 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             }).ToList();
         }
 
-        public override async Task<IReadOnlyList<BancoBr.API.Base.Models.ConvenioHabilitado>> ConsultarConveniosHabilitadosAsync(long transacao, long instituicao, CancellationToken cancellationToken = default)
+        public override async Task<IReadOnlyList<Base.Models.ConvenioHabilitado>> ConsultarConveniosHabilitadosAsync(long transacao, long instituicao, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}arrecadacao/convenios-habilitados?transacao={transacao}&instituicao={instituicao}";
             var itens = await SendAsync<List<ConvenioHabilitado>>(HttpMethod.Get, url, body: null, cancellationToken)
                 .ConfigureAwait(false);
-            return itens?.Select(dto => new BancoBr.API.Base.Models.ConvenioHabilitado
+            return itens?.Select(dto => new Base.Models.ConvenioHabilitado
             {
                 Identificador = dto.Identificador,
                 Sigla = dto.Sigla,
@@ -252,65 +321,85 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             }).ToList();
         }
 
-        private static BancoBr.API.Base.Models.ConvenioConsultaResponse MapConvenioConsultaResponse(ConvenioConsultaResponse dto) => dto == null ? null : new BancoBr.API.Base.Models.ConvenioConsultaResponse
-        {
-            Convenio = dto.Convenio,
-            SiglaConvenio = dto.SiglaConvenio,
-            ValorDocumento = dto.ValorDocumento,
-            ValorDesconto = dto.ValorDesconto,
-            ValorMulta = dto.ValorMulta,
-            ValorJuros = dto.ValorJuros,
-            ValorOutrosEncargos = dto.ValorOutrosEncargos,
-            ValorTotal = dto.ValorTotal,
-            CodigoConvenioFebraban = dto.CodigoConvenioFebraban,
-            Nsu = dto.Nsu,
-            Transacao = dto.Transacao,
-        };
+        #endregion
 
-        private static ArrecadacaoPagamentoRequest MapArrecadacaoPagamentoRequest(BancoBr.API.Base.Models.ArrecadacaoPagamentoRequest request) => new ArrecadacaoPagamentoRequest
+        #region ::. Mapeamento Movimento <-> Sicoob .::
+
+        private static MovimentoItemPagamentoConvenioCodigoBarra ExtrairItem(Movimento movimento)
+        {
+            if (movimento == null) throw new ArgumentNullException(nameof(movimento));
+
+            var item = movimento.MovimentoItem as MovimentoItemPagamentoConvenioCodigoBarra;
+            if (item == null)
+                throw new InvalidOperationException("As operações de convênio esperam um MovimentoItemPagamentoConvenioCodigoBarra em Movimento.MovimentoItem.");
+
+            return item;
+        }
+
+        private static long ObterNsu(Movimento movimento, MovimentoItemPagamentoConvenioCodigoBarra item)
+        {
+            if (item.Nsu.HasValue)
+                return item.Nsu.Value;
+
+            long nsu;
+            if (!string.IsNullOrWhiteSpace(movimento.NumeroDocumentoNoBanco) && long.TryParse(movimento.NumeroDocumentoNoBanco, out nsu))
+                return nsu;
+
+            throw new InvalidOperationException("Para consultar o comprovante, o movimento precisa ter o NSU da arrecadação (MovimentoItem.Nsu ou NumeroDocumentoNoBanco).");
+        }
+
+        private static ArrecadacaoPagamentoRequest MontarRequisicaoPagamento(Movimento movimento, MovimentoItemPagamentoConvenioCodigoBarra item, Correntista origem, int unidade) => new ArrecadacaoPagamentoRequest
         {
             Identificacao = new Identificacao
             {
-                Instituicao = request.Identificacao.Instituicao,
-                Unidade = request.Identificacao.Unidade,
+                // A "instituição" da arrecadação é a cooperativa/agência da conta pagadora,
+                // mesmo número usado como DebtorAccount.Issuer no pagamento de boletos.
+                Instituicao = origem.NumeroAgencia,
+                Unidade = unidade,
             },
             Pagamento = new PagamentoConvenio
             {
-                ValorPago = request.Pagamento.ValorPago,
-                Nsu = request.Pagamento.Nsu,
-                DataPagamento = request.Pagamento.DataPagamento,
-                ValorDocumento = request.Pagamento.ValorDocumento,
-                ValorDesconto = request.Pagamento.ValorDesconto,
-                ValorJuros = request.Pagamento.ValorJuros,
-                ValorMulta = request.Pagamento.ValorMulta,
-                RecebimentoViaCaixa = request.Pagamento.RecebimentoViaCaixa,
+                ValorPago = movimento.ValorPagamento,
+                Nsu = item.Nsu,
+                DataPagamento = movimento.DataPagamento,
+                ValorDocumento = item.ValorDocumento,
+                ValorDesconto = item.ValorDesconto,
+                ValorJuros = item.ValorJuros,
+                ValorMulta = item.ValorMulta,
+                RecebimentoViaCaixa = item.RecebimentoViaCaixa,
             },
-            Transacao = request.Transacao,
+            // Devolvida pela consulta do código de barras; é o que o Sicoob usa para deduplicar
+            // reenvios (e o que permite recuperar um pagamento já efetivado).
+            Transacao = item.Transacao.GetValueOrDefault(),
         };
 
-        private static BancoBr.API.Base.Models.Arrecadacao MapArrecadacao(Arrecadacao dto) => dto == null ? null : new BancoBr.API.Base.Models.Arrecadacao
+        private static void AplicarArrecadacao(Movimento movimento, MovimentoItemPagamentoConvenioCodigoBarra item, Arrecadacao arrecadacao)
         {
-            ValorPago = dto.ValorPago,
-            Nsu = dto.Nsu,
-            DataPagamento = dto.DataPagamento,
-            ValorDocumento = dto.ValorDocumento,
-            ValorDesconto = dto.ValorDesconto,
-            ValorJuros = dto.ValorJuros,
-            ValorMulta = dto.ValorMulta,
-            Autenticacao = dto.Autenticacao,
-            RecebimentoViaCaixa = dto.RecebimentoViaCaixa,
-        };
+            if (arrecadacao == null)
+                return;
 
-        private static BancoBr.API.Base.Models.ArrecadacaoResultado MapArrecadacaoResultado(ArrecadacaoResultado dto) => dto == null ? null : new BancoBr.API.Base.Models.ArrecadacaoResultado
-        {
-            Comprovante = dto.Comprovante,
-            Arrecadacao = MapArrecadacao(dto.Arrecadacao),
-        };
+            if (arrecadacao.ValorPago != 0)
+                movimento.ValorPagamento = arrecadacao.ValorPago;
+
+            if (arrecadacao.DataPagamento != default(DateTime))
+                movimento.DataPagamento = arrecadacao.DataPagamento;
+
+            if (arrecadacao.Nsu.HasValue)
+                movimento.NumeroDocumentoNoBanco = arrecadacao.Nsu.Value.ToString();
+
+            item.Nsu = arrecadacao.Nsu ?? item.Nsu;
+            item.ValorDocumento = arrecadacao.ValorDocumento;
+            item.ValorDesconto = arrecadacao.ValorDesconto;
+            item.ValorJuros = arrecadacao.ValorJuros;
+            item.ValorMulta = arrecadacao.ValorMulta;
+            item.Autenticacao = arrecadacao.Autenticacao;
+            item.RecebimentoViaCaixa = arrecadacao.RecebimentoViaCaixa ?? item.RecebimentoViaCaixa;
+        }
 
         /// <summary>
         /// ATENÇÃO: mapeamento best-effort do campo "situacao.descricao" (e, em caráter secundário,
         /// "situacao.codigo") retornado pela API de Arrecadação/Convênios do Sicoob para o enum
-        /// agnóstico <see cref="BancoBr.API.Base.Models.BancoBrSituacaoEnum"/>. O único valor
+        /// agnóstico <see cref="BancoBrSituacaoEnum"/>. O único valor
         /// confirmado em testes/documentação disponível neste repositório é descricao "Recebido"
         /// com codigo 0. Os demais valores abaixo foram inferidos a partir do vocabulário plausível
         /// de status de arrecadação e NÃO estão confirmados — DEVEM SER VALIDADOS/AJUSTADOS contra
@@ -318,35 +407,35 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
         /// valor não reconhecido cai em NaoIntegrado, para nunca reportar falsamente
         /// Efetivado/Cancelado.
         /// </summary>
-        private static BancoBr.API.Base.Models.BancoBrSituacaoEnum MapSituacaoArrecadacaoParaSituacao(SituacaoArrecadacao situacao)
+        private static BancoBrSituacaoEnum MapSituacaoArrecadacaoParaSituacao(SituacaoArrecadacao situacao)
         {
-            if (situacao == null) return BancoBr.API.Base.Models.BancoBrSituacaoEnum.NaoIntegrado;
+            if (situacao == null) return BancoBrSituacaoEnum.NaoIntegrado;
 
             switch (situacao.Descricao?.Trim().ToUpperInvariant())
             {
                 case "RECEBIDO":
                 case "PAGO":
                 case "EFETIVADO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Efetivado;
+                    return BancoBrSituacaoEnum.Efetivado;
 
                 case "AGENDADO":
                 case "PENDENTE":
                 case "EM_PROCESSAMENTO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Agendado;
+                    return BancoBrSituacaoEnum.Agendado;
 
                 case "CANCELADO":
                 case "ESTORNADO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Cancelado;
+                    return BancoBrSituacaoEnum.Cancelado;
 
                 case "REJEITADO":
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.Rejeitado;
+                    return BancoBrSituacaoEnum.Rejeitado;
 
                 default:
-                    return BancoBr.API.Base.Models.BancoBrSituacaoEnum.NaoIntegrado;
+                    return BancoBrSituacaoEnum.NaoIntegrado;
             }
         }
 
-        private static BancoBr.API.Base.Models.ArrecadacaoConsultaItem MapArrecadacaoConsultaItem(ArrecadacaoConsultaItem dto) => new BancoBr.API.Base.Models.ArrecadacaoConsultaItem
+        private static Base.Models.ArrecadacaoConsultaItem MapArrecadacaoConsultaItem(ArrecadacaoConsultaItem dto) => new Base.Models.ArrecadacaoConsultaItem
         {
             ValorPago = dto.ValorPago,
             Nsu = dto.Nsu,
@@ -359,7 +448,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             AnoExercicio = dto.AnoExercicio,
             RecebimentoViaCaixa = dto.RecebimentoViaCaixa,
             Autenticacao = dto.Autenticacao,
-            Situacao = dto.Situacao == null ? null : new BancoBr.API.Base.Models.SituacaoArrecadacao
+            Situacao = dto.Situacao == null ? null : new Base.Models.SituacaoArrecadacao
             {
                 Codigo = dto.Situacao.Codigo,
                 Descricao = dto.Situacao.Descricao,
@@ -369,6 +458,10 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             SiglaConvenio = dto.SiglaConvenio,
             Transacao = dto.Transacao,
         };
+
+        #endregion
+
+        #region ::. Plumbing HTTP .::
 
         private async Task<T> SendAsync<T>(HttpMethod method, string url, string body, CancellationToken cancellationToken)
         {
@@ -445,5 +538,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
 
             throw new SicoobApiException((int)response.StatusCode, errorResponse?.Mensagens ?? new List<SicoobMensagem>());
         }
+
+        #endregion
     }
 }

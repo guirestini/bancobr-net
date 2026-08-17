@@ -4,8 +4,8 @@ using BancoBr.API.Core.Http;
 using BancoBr.API.Core.Models;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Errors;
-using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
 using BancoBr.Common.Enums;
+using BancoBr.Common.Instances;
 
 // Console standalone para validar a integração Sicoob (PagamentoBoletoClient) contra um
 // ambiente real (sandbox/homologação), sem depender de um ERP. Nenhuma credencial é lida
@@ -63,23 +63,41 @@ var client = usarTokenFixo
     ? BancoApi.Criar<PagamentoBoletoApiBase>(BancoEnum.Sicoob, clientId!, certificateSource, new StaticAccessTokenProvider(accessToken!))
     : BancoApi.Criar<PagamentoBoletoApiBase>(BancoEnum.Sicoob, clientId!, clientSecret: null, certificateSource, tokenEndpointOverride);
 
+// A conta pagadora é passada como Correntista, do mesmo jeito que ArquivoCNAB recebe a
+// empresa separada da lista de movimentos.
+var origem = new Correntista
+{
+    NumeroAgencia = numeroAgencia,
+    NumeroConta = (int)numeroConta,
+    TipoPessoa = TipoInscricaoCPFCNPJEnum.CNPJ,
+};
+
+// O contrato público de BancoBr.API é o mesmo Movimento/MovimentoItem usado pelo CNAB.
+var movimento = new Movimento
+{
+    TipoLancamento = TipoLancamentoEnum.PagamentoTituloOutroBanco,
+    MovimentoItem = new MovimentoItemPagamentoTituloCodigoBarra { CodigoBarras = codigoBarras! },
+};
+
 try
 {
     Console.WriteLine($"Consultando boleto {codigoBarras} na conta {numeroConta}...");
-    var consulta = await client.ConsultarBoletoAsync(codigoBarras!, numeroConta);
+    await client.ConsultarBoletoAsync(movimento, origem);
 
-    if (consulta == null)
+    var item = (MovimentoItemPagamentoTituloCodigoBarra)movimento.MovimentoItem;
+
+    if (movimento.SituacaoBancoBr == BancoBrSituacaoEnum.Cancelado && item.IdentificadorConsulta == null)
     {
-        Console.WriteLine("Boleto não encontrado (204 sem conteúdo).");
+        Console.WriteLine($"Boleto não disponível para pagamento: {movimento.DetalheRejeicaoBancoBr}");
         return 0;
     }
 
-    Console.WriteLine($"Beneficiário: {consulta.NomeRazaoSocialBeneficiario} ({consulta.NumeroCpfCnpjBeneficiario})");
-    Console.WriteLine($"Valor do boleto: {consulta.ValorBoleto:C}");
-    Console.WriteLine($"Valor de pagamento: {consulta.ValorPagamento:C}");
-    Console.WriteLine($"Vencimento: {consulta.DataVencimentoBoleto:yyyy-MM-dd}");
-    Console.WriteLine($"IdentificadorConsulta: {consulta.IdentificadorConsulta}");
-    Console.WriteLine($"BloquearPagamento: {consulta.BloquearPagamento} ({consulta.MensagemBloqueioPagamento})");
+    Console.WriteLine($"Beneficiário: {movimento.Favorecido?.Nome} ({movimento.Favorecido?.CPF_CNPJ})");
+    Console.WriteLine($"Valor do boleto: {item.ValorCodigoBarra:C}");
+    Console.WriteLine($"Valor de pagamento: {movimento.ValorPagamento:C}");
+    Console.WriteLine($"Vencimento: {item.DataVencimento:yyyy-MM-dd}");
+    Console.WriteLine($"IdentificadorConsulta: {item.IdentificadorConsulta}");
+    Console.WriteLine($"Situação: {movimento.SituacaoBancoBr} ({movimento.DetalheRejeicaoBancoBr})");
 
     if (!confirmarPagamento)
     {
@@ -88,7 +106,7 @@ try
         return 0;
     }
 
-    if (consulta.BloquearPagamento)
+    if (movimento.SituacaoBancoBr == BancoBrSituacaoEnum.Cancelado)
     {
         Console.WriteLine("Pagamento bloqueado pelo Sicoob para este boleto; abortando antes de chamar PagarBoletoAsync.");
         return 1;
@@ -97,41 +115,15 @@ try
     Console.WriteLine();
     Console.WriteLine("SICOOB_CONFIRMAR_PAGAMENTO=true: chamando PagarBoletoAsync...");
 
-    var request = new BancoBr.API.Base.Models.BoletoPagamentoRequest
-    {
-        IdentificadorConsulta = consulta.IdentificadorConsulta,
-        ValorBoleto = consulta.ValorBoleto,
-        ValorDescontoAbatimento = consulta.ValorAbatimentoDesconto,
-        ValorMultaMora = consulta.ValorMultaMora,
-        Amount = consulta.ValorPagamento,
-        Date = consulta.DataPagamento,
-        AceitaValorDivergente = false,
-        NumeroCpfCnpjPortador = consulta.NumeroCpfCnpjPagador,
-        NomePortador = consulta.NomeRazaoSocialPagador,
-        DebtorAccount = new BancoBr.API.Base.Models.DebtorAccount
-        {
-            Issuer = numeroAgencia,
-            Number = numeroConta,
-            AccountType = 0,
-            PersonType = 1,
-        },
-    };
+    // O portador enviado ao banco vem do Correntista; aqui reaproveitamos o que o próprio
+    // boleto devolveu como pagador, para o sandbox não exigir mais variáveis de ambiente.
+    origem.Nome = item.PagadorConfirmadoNome;
+    origem.CPF_CNPJ = item.PagadorConfirmadoDocumento;
 
     var idempotencyKey = IdempotencyKey.New(numeroAgencia, numeroConta, idLancamento);
-    var resultado = await client.PagarBoletoAsync(codigoBarras!, request, idempotencyKey);
+    await client.PagarBoletoAsync(movimento, origem, idempotencyKey);
 
-    if (resultado.PendenteAssinatura)
-    {
-        Console.WriteLine("Pagamento pendente de assinatura (202).");
-    }
-    else if (resultado.Comprovante == null)
-    {
-        Console.WriteLine("Pagamento processado sem conteúdo de retorno (204).");
-    }
-    else
-    {
-        Console.WriteLine($"Pagamento efetivado. IdPagamento={resultado.Comprovante.IdPagamento}, Situação={resultado.Comprovante.SituacaoPagamento}");
-    }
+    Console.WriteLine($"Pagamento processado. Situação={movimento.SituacaoBancoBr}, IdPagamento={movimento.NumeroDocumentoNoBanco}, Detalhe={movimento.DetalheRejeicaoBancoBr}");
 
     return 0;
 }

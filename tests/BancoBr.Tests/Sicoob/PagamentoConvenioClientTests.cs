@@ -1,7 +1,8 @@
 using System.Net;
 using BancoBr.API.Sicoob.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Convenios;
-using BancoBr.API.Base.Models;
+using BancoBr.Common.Enums;
+using BancoBr.Common.Instances;
 using Xunit;
 
 namespace BancoBr.Tests.Sicoob
@@ -9,6 +10,8 @@ namespace BancoBr.Tests.Sicoob
     public class PagamentoConvenioClientTests
     {
         private static readonly Uri BaseUrl = new Uri("https://api.sicoob.com.br/convenios-pagamentos/v2");
+
+        private const string CodigoBarras = "00000000000000000000000000000000000000000000";
 
         private static PagamentoConvenioClient CriarClient(FakeHttpMessageHandler handler)
         {
@@ -21,6 +24,29 @@ namespace BancoBr.Tests.Sicoob
             var httpClient = new HttpClient(handler);
             return new PagamentoConvenioClient(httpClient, new FakeOAuthTokenProvider(), "fake-client-id", BaseUrl);
         }
+
+        /// <summary>A "instituicao" da arrecadação vem do NumeroAgencia da conta pagadora.</summary>
+        private static Correntista CriarOrigem(int instituicao = 1234) => new Correntista
+        {
+            NumeroAgencia = instituicao,
+            NumeroConta = 1234569,
+            Nome = "Empresa Teste",
+            CPF_CNPJ = "12345678000199",
+            TipoPessoa = TipoInscricaoCPFCNPJEnum.CNPJ,
+        };
+
+        private static Movimento CriarMovimento(DateTime? dataPagamento = null, long? transacao = null) => new Movimento
+        {
+            DataPagamento = dataPagamento ?? new DateTime(2026, 6, 29),
+            MovimentoItem = new MovimentoItemPagamentoConvenioCodigoBarra
+            {
+                CodigoBarra = CodigoBarras,
+                Transacao = transacao,
+            },
+        };
+
+        private static MovimentoItemPagamentoConvenioCodigoBarra Item(Movimento movimento) =>
+            (MovimentoItemPagamentoConvenioCodigoBarra)movimento.MovimentoItem;
 
         [Fact]
         public async Task ConsultarCodigoBarrasAsync_200_RetornaDadosDoConvenio()
@@ -37,16 +63,22 @@ namespace BancoBr.Tests.Sicoob
                 ""valorOutrosEncargos"": 0,
                 ""valorTotal"": 1171.23,
                 ""codigoConvenioFebraban"": ""0025"",
-                ""nsu"": 183390172928
+                ""nsu"": 183390172928,
+                ""transacao"": 123456789
               }
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
 
-            var resultado = await client.ConsultarCodigoBarrasAsync("00000000000000000000000000000000000000000000", new DateTime(2026, 6, 29));
+            var resultado = await client.ConsultarCodigoBarrasAsync(movimento, CriarOrigem());
 
-            Assert.Equal("SiG", resultado.SiglaConvenio);
-            Assert.Equal(183390172928, resultado.Nsu);
+            Assert.Same(movimento, resultado);
+            Assert.Equal("SiG", Item(resultado).SiglaConvenio);
+            Assert.Equal(183390172928, Item(resultado).Nsu);
+            Assert.Equal(1171.23m, resultado.ValorPagamento);
+            // A transação devolvida pela consulta é o que o pagamento reenvia.
+            Assert.Equal(123456789, Item(resultado).Transacao);
             Assert.Equal("fake-client-id", handler.LastRequest!.Headers.GetValues("client_id").Single());
         }
 
@@ -72,27 +104,22 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
-            var request = new ArrecadacaoPagamentoRequest
-            {
-                Identificacao = new Identificacao { Instituicao = 1234, Unidade = 0 },
-                Pagamento = new PagamentoConvenio
-                {
-                    ValorPago = 1171.23m,
-                    DataPagamento = new DateTime(2026, 6, 29),
-                    ValorDocumento = 1171.23m,
-                    ValorDesconto = 11.23m,
-                    ValorJuros = 1.71m,
-                    ValorMulta = 17.23m,
-                },
-                Transacao = 123456789,
-            };
 
-            var resultado = await client.PagarConvenioAsync("00000000000000000000000000000000000000000000", request);
+            var movimento = CriarMovimento(transacao: 123456789);
+            movimento.ValorPagamento = 1171.23m;
+            Item(movimento).ValorDocumento = 1171.23m;
+            Item(movimento).ValorDesconto = 11.23m;
+            Item(movimento).ValorJuros = 1.71m;
+            Item(movimento).ValorMulta = 17.23m;
 
-            Assert.False(resultado.PendenteAssinatura);
-            Assert.NotNull(resultado.Resultado);
-            Assert.Equal("71205202-2DBB-46C7-BA31-0DFB8DC64EBE", resultado.Resultado.Arrecadacao.Autenticacao);
+            var resultado = await client.PagarConvenioAsync(movimento, CriarOrigem());
+
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.SituacaoBancoBr);
+            Assert.Equal("PCFbQ0RBVEFb", Item(resultado).ComprovanteBase64);
+            Assert.Equal("71205202-2DBB-46C7-BA31-0DFB8DC64EBE", Item(resultado).Autenticacao);
+            Assert.Equal("183390172928", resultado.NumeroDocumentoNoBanco);
             Assert.Contains("\"instituicao\":1234", handler.LastRequestBody);
+            Assert.Contains("\"transacao\":123456789", handler.LastRequestBody);
             Assert.Contains("2026-06-29", handler.LastRequestBody);
         }
 
@@ -101,17 +128,13 @@ namespace BancoBr.Tests.Sicoob
         {
             var handler = new FakeHttpMessageHandler(HttpStatusCode.Accepted);
             var client = CriarClient(handler);
-            var request = new ArrecadacaoPagamentoRequest
-            {
-                Identificacao = new Identificacao { Instituicao = 1234, Unidade = 0 },
-                Pagamento = new PagamentoConvenio { DataPagamento = new DateTime(2026, 6, 29) },
-                Transacao = 123456789,
-            };
+            var movimento = CriarMovimento(transacao: 123456789);
 
-            var resultado = await client.PagarConvenioAsync("00000000000000000000000000000000000000000000", request);
+            var resultado = await client.PagarConvenioAsync(movimento, CriarOrigem());
 
-            Assert.True(resultado.PendenteAssinatura);
-            Assert.Null(resultado.Resultado);
+            Assert.Equal(BancoBrSituacaoEnum.Agendado, resultado.SituacaoBancoBr);
+            Assert.Contains("assinatura", resultado.DetalheRejeicaoBancoBr);
+            Assert.Null(Item(resultado).ComprovanteBase64);
         }
 
         [Fact]
@@ -123,15 +146,9 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, json);
             var client = CriarClient(handler);
-            var request = new ArrecadacaoPagamentoRequest
-            {
-                Identificacao = new Identificacao { Instituicao = 1234, Unidade = 0 },
-                Pagamento = new PagamentoConvenio { DataPagamento = new DateTime(2026, 6, 29) },
-                Transacao = 123456789,
-            };
 
             var ex = await Assert.ThrowsAsync<SicoobApiException>(() =>
-                client.PagarConvenioAsync("00000000000000000000000000000000000000000000", request));
+                client.PagarConvenioAsync(CriarMovimento(transacao: 123456789), CriarOrigem()));
 
             Assert.Equal(400, ex.HttpStatusCode);
             Assert.Equal("20011", ex.Mensagens.Single().Codigo);
@@ -162,20 +179,16 @@ namespace BancoBr.Tests.Sicoob
                 (HttpStatusCode.BadRequest, erroJson),
                 (HttpStatusCode.OK, pagamentosJson));
             var client = CriarClient(handler);
-            var request = new ArrecadacaoPagamentoRequest
-            {
-                Identificacao = new Identificacao { Instituicao = 1234, Unidade = 0 },
-                Pagamento = new PagamentoConvenio { DataPagamento = new DateTime(2026, 6, 29) },
-                Transacao = 123456789,
-            };
+            var movimento = CriarMovimento(transacao: 123456789);
 
-            var resultado = await client.PagarConvenioAsync("00000000000000000000000000000000000000000000", request);
+            var resultado = await client.PagarConvenioAsync(movimento, CriarOrigem());
 
             Assert.Equal(2, handler.Requests.Count);
-            Assert.False(resultado.PendenteAssinatura);
-            Assert.NotNull(resultado.Resultado);
-            Assert.Null(resultado.Resultado.Comprovante);
-            Assert.Equal("71205202-2DBB-46C7-BA31-0DFB8DC64EBE", resultado.Resultado.Arrecadacao.Autenticacao);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado.SituacaoBancoBr);
+            // A consulta de pagamentos não devolve o PDF do comprovante — só os dados da arrecadação.
+            Assert.Null(Item(resultado).ComprovanteBase64);
+            Assert.Equal("71205202-2DBB-46C7-BA31-0DFB8DC64EBE", Item(resultado).Autenticacao);
+            Assert.Equal("183390172928", resultado.NumeroDocumentoNoBanco);
         }
 
         [Fact]
@@ -191,15 +204,9 @@ namespace BancoBr.Tests.Sicoob
                 (HttpStatusCode.BadRequest, erroJson),
                 (HttpStatusCode.OK, pagamentosJson));
             var client = CriarClient(handler);
-            var request = new ArrecadacaoPagamentoRequest
-            {
-                Identificacao = new Identificacao { Instituicao = 1234, Unidade = 0 },
-                Pagamento = new PagamentoConvenio { DataPagamento = new DateTime(2026, 6, 29) },
-                Transacao = 123456789,
-            };
 
             var ex = await Assert.ThrowsAsync<SicoobApiException>(() =>
-                client.PagarConvenioAsync("00000000000000000000000000000000000000000000", request));
+                client.PagarConvenioAsync(CriarMovimento(transacao: 123456789), CriarOrigem()));
 
             Assert.Equal("10272", ex.Mensagens.Single().Codigo);
         }
@@ -225,7 +232,7 @@ namespace BancoBr.Tests.Sicoob
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
 
-            var resultado = await client.ConsultarPagamentosAsync("00000000000000000000000000000000000000000000", 1234, new DateTime(2026, 6, 29));
+            var resultado = await client.ConsultarPagamentosAsync(CodigoBarras, 1234, new DateTime(2026, 6, 29));
 
             Assert.Single(resultado);
             Assert.Equal("Recebido", resultado[0].Situacao.Descricao);
@@ -253,7 +260,7 @@ namespace BancoBr.Tests.Sicoob
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
 
-            var resultado = await client.ConsultarPagamentosAsync("00000000000000000000000000000000000000000000", 1234, new DateTime(2026, 6, 29));
+            var resultado = await client.ConsultarPagamentosAsync(CodigoBarras, 1234, new DateTime(2026, 6, 29));
 
             Assert.Equal(BancoBrSituacaoEnum.NaoIntegrado, resultado[0].BancoBrSituacao);
         }
@@ -279,7 +286,7 @@ namespace BancoBr.Tests.Sicoob
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
 
-            var resultado = await client.ConsultarPagamentosAsync("00000000000000000000000000000000000000000000", 1234, new DateTime(2026, 6, 29));
+            var resultado = await client.ConsultarPagamentosAsync(CodigoBarras, 1234, new DateTime(2026, 6, 29));
 
             Assert.Equal(BancoBrSituacaoEnum.Rejeitado, resultado[0].BancoBrSituacao);
         }
@@ -302,11 +309,14 @@ namespace BancoBr.Tests.Sicoob
             }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
+            var movimento = CriarMovimento();
+            Item(movimento).Nsu = 183390172928;
 
-            var resultado = await client.ConsultarComprovantePorNsuAsync(183390172928, 1234);
+            var resultado = await client.ConsultarComprovantePorNsuAsync(movimento, CriarOrigem());
 
-            Assert.Equal("PCFbQ0RBVEFb", resultado.Comprovante);
-            Assert.Equal("71205202-2DBB-46C7-BA31-0DFB8DC64EBE", resultado.Pagamento.Autenticacao);
+            Assert.Equal("PCFbQ0RBVEFb", Item(resultado).ComprovanteBase64);
+            Assert.Equal("71205202-2DBB-46C7-BA31-0DFB8DC64EBE", Item(resultado).Autenticacao);
+            Assert.Contains("183390172928", handler.LastRequest!.RequestUri!.ToString());
         }
 
         [Fact]
@@ -363,10 +373,10 @@ namespace BancoBr.Tests.Sicoob
                 (HttpStatusCode.OK, json));
             var client = CriarClient(handler);
 
-            var resultado = await client.ConsultarCodigoBarrasAsync("00000000000000000000000000000000000000000000", new DateTime(2026, 6, 29));
+            var resultado = await client.ConsultarCodigoBarrasAsync(CriarMovimento(), CriarOrigem());
 
             Assert.Equal(2, handler.Requests.Count);
-            Assert.Equal("SiG", resultado!.SiglaConvenio);
+            Assert.Equal("SiG", Item(resultado).SiglaConvenio);
         }
     }
 }
