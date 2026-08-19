@@ -116,6 +116,47 @@ namespace BancoBr.Common.Instances
         public string DVConta { get; set; }
         public FinalidadeTEDEnum CodigoFinalidadeTED { get; set; }
         public TipoContaEnum TipoConta { get; set; }
+
+        #region ::. Resultado das APIs bancárias .::
+
+        /// <summary>Campo descritivo de histórico, enviado no pedido e ecoado pela resposta.</summary>
+        public string Historico { get; set; }
+
+        /// <summary>Número do PA, exigido pela API do Sicoob ("0" quando não aplicável).</summary>
+        public string NumeroPa { get; set; }
+
+        /// <summary>
+        /// Número de controle atribuído pela IF ao envio — é o "codigo" usado para consultar a
+        /// TED depois (GET /transferencias/{codigo}). Preenchido em <see cref="Movimento.NumeroDocumentoNoBanco"/>.
+        /// </summary>
+        public string NumeroControleIF { get; set; }
+
+        /// <summary>
+        /// Id do agendamento atribuído pelo banco — distinto de <see cref="NumeroControleIF"/>,
+        /// é o identificador usado para cancelar (DELETE /transferencias/agendamentos/{idAgendamento}).
+        /// </summary>
+        public long IdAgendamento { get; set; }
+
+        /// <summary>Indica se a TED foi agendada (campo "agendamento" da resposta).</summary>
+        public bool Agendado { get; set; }
+
+        /// <summary>Situação textual da TED, conforme devolvida pelo banco (vocabulário não normalizado).</summary>
+        public string Situacao { get; set; }
+
+        public int CodigoSituacaoAgendamento { get; set; }
+
+        public string MensagemErro { get; set; }
+
+        /// <summary>Tipo da pessoa debitada ("F" ou "J"), conforme devolvido pelo banco.</summary>
+        public string TipoPessoaDebito { get; set; }
+
+        public string NomePessoaDebito { get; set; }
+
+        public string NumeroCPFCNPJDebito { get; set; }
+
+        public int NumeroBancoFavorecido { get; set; }
+
+        #endregion
     }
 
     public class MovimentoItemPagamentoTituloCodigoBarra : MovimentoItem

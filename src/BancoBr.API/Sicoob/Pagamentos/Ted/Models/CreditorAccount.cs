@@ -1,0 +1,25 @@
+using Newtonsoft.Json;
+
+namespace BancoBr.API.Sicoob.Pagamentos.Ted.Models
+{
+    /// <summary>Conta do beneficiário da TED.</summary>
+    public class CreditorAccount
+    {
+        [JsonProperty("ispb")]
+        public string Ispb { get; set; }
+
+        [JsonProperty("issuer")]
+        public int Issuer { get; set; }
+
+        [JsonProperty("number")]
+        public string Number { get; set; }
+
+        /// <summary>CACC (Conta-Corrente), SLRY (Conta-Salário), SVGS (Conta-Poupança) ou TRAN (Conta-Pagamento).</summary>
+        [JsonProperty("accountType")]
+        public string AccountType { get; set; }
+
+        /// <summary>NATURAL_PERSON (pessoa física) ou LEGAL_PERSON (pessoa jurídica).</summary>
+        [JsonProperty("personType")]
+        public string PersonType { get; set; }
+    }
+}

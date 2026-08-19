@@ -6,6 +6,7 @@ using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
 using BancoBr.API.Sicoob.Pagamentos.Convenios;
 using BancoBr.API.Sicoob.Pagamentos.Pix;
+using BancoBr.API.Sicoob.Pagamentos.Ted;
 using BancoBr.Common.Enums;
 
 namespace BancoBr.API.Core
@@ -36,6 +37,10 @@ namespace BancoBr.API.Core
             Registrar<PagamentoPixApiBase>(BancoEnum.Sicoob,
                 (clientId, clientSecret, certificateSource, tokenEndpoint) => new PagamentoPixClient(clientId, clientSecret, certificateSource, tokenEndpoint),
                 (clientId, certificateSource, tokenProvider) => new PagamentoPixClient(clientId, certificateSource, tokenProvider));
+
+            Registrar<PagamentoTedApiBase>(BancoEnum.Sicoob,
+                (clientId, clientSecret, certificateSource, tokenEndpoint) => new TedClient(clientId, clientSecret, certificateSource, tokenEndpoint),
+                (clientId, certificateSource, tokenProvider) => new TedClient(clientId, certificateSource, tokenProvider));
         }
 
         private static void Registrar<TApiBase>(BancoEnum banco, Func<string, string, CertificateSource, Uri, TApiBase> comClientSecret, Func<string, CertificateSource, IAccessTokenProvider, TApiBase> comTokenProvider)
