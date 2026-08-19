@@ -216,7 +216,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
 
             return new RequisicaoTed
             {
-                DebtorAccount = new DebtorAccount
+                DebtorAccount = new Models.DebtorAccount
                 {
                     Issuer = origem.NumeroAgencia.ToString(),
                     Number = $"{origem.NumeroConta}{origem.DVConta}",
