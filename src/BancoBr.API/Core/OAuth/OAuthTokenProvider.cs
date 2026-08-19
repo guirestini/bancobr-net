@@ -79,9 +79,17 @@ namespace BancoBr.API.Core.OAuth
             using (var request = new HttpRequestMessage(HttpMethod.Post, _options.TokenEndpoint) { Content = content })
             using (var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false))
             {
-                response.EnsureSuccessStatusCode();
-
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                // EnsureSuccessStatusCode() descarta o corpo da resposta — para um erro de
+                // OAuth2 (ex.: "invalid_scope"), é exatamente nesse corpo que está o motivo
+                // real. Incluir aqui evita depurar às cegas quando um scope está errado/não
+                // habilitado para o app.
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"Falha ao obter token OAuth2 ({(int)response.StatusCode} {response.StatusCode}): {body}");
+                }
+
                 var root = JObject.Parse(body);
                 _cachedAccessToken = (string)root["access_token"];
 

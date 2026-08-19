@@ -38,13 +38,13 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
         private static readonly Uri DefaultTokenEndpoint = new Uri("https://auth.sicoob.com.br/auth/realms/cooperado/protocol/openid-connect/token");
 
         /// <summary>
-        /// ATENÇÃO: os nomes de scope da API SPB Transferências não estão documentados no
-        /// material disponível neste repositório — os valores abaixo seguem só o padrão de
-        /// nomenclatura já usado pelas demais APIs do Sicoob (ex.: "convenios_consulta"/
-        /// "convenios_escrita") e PRECISAM ser validados/ajustados contra o cadastro real do
-        /// aplicativo no Sicoob antes de uso em produção.
+        /// Confirmado no portal de developers do Sicoob (app do cliente): os scopes aprovados
+        /// para a API SPB Transferências são "spb_consulta" e "spb_escrita" — meus primeiros
+        /// valores ("spb_transferencias_consulta"/"spb_transferencias_escrita", um chute
+        /// seguindo o padrão de nomenclatura das demais APIs) foram rejeitados pelo Sicoob com
+        /// "invalid_scope" ao gerar o token OAuth2.
         /// </summary>
-        private static readonly string[] Scopes = { "spb_transferencias_consulta", "spb_transferencias_escrita" };
+        private static readonly string[] Scopes = { "spb_consulta", "spb_escrita" };
 
         /// <summary>ATENÇÃO: rate limit não documentado — usando o mesmo padrão conservador de Boletos/Convênios.</summary>
         private const int RequestsPerSecond = 2;
@@ -218,7 +218,9 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
             {
                 DebtorAccount = new Models.DebtorAccount
                 {
-                    Issuer = origem.NumeroAgencia.ToString(),
+                    // A API exige a agência com 4 dígitos, zero à esquerda
+                    // (ERRO_TAMANHO_NUMEROAGENCIA quando enviada sem padding).
+                    Issuer = origem.NumeroAgencia.ToString("D4"),
                     Number = $"{origem.NumeroConta}{origem.DVConta}",
                     // A conta de origem é sempre corrente — única modalidade habilitada para
                     // pagamento via API (mesma premissa já usada por Boleto/Pix nesta lib).
@@ -229,7 +231,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
                 CreditorAccount = new CreditorAccount
                 {
                     Ispb = TabelaIspbPorCompe.ObterIspb(item.Banco),
-                    Issuer = item.NumeroAgencia,
+                    Issuer = item.NumeroAgencia.ToString("D4"),
                     Number = $"{item.NumeroConta}{item.DVConta}",
                     AccountType = ContaWire(item.TipoConta),
                     PersonType = PessoaWire(movimento.Favorecido.TipoPessoa),
@@ -243,7 +245,9 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
                 Date = dataPagamento.ToString("yyyy-MM-dd"),
                 Amount = movimento.ValorPagamento.ToString("0.00", CultureInfo.InvariantCulture),
                 Finalidade = ((int)item.CodigoFinalidadeTED).ToString("D5"),
-                NumeroPa = string.IsNullOrWhiteSpace(item.NumeroPa) ? "0" : item.NumeroPa,
+                // EXPERIMENTAL: numeroPa = agência de origem, para isolar o
+                // ERRO_TAMANHO_NUMEROAGENCIA.
+                NumeroPa = string.IsNullOrWhiteSpace(item.NumeroPa) ? origem.NumeroAgencia.ToString() : item.NumeroPa,
                 Historico = item.Historico,
             };
         }
@@ -394,6 +398,14 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
             using (var request = requestFactory())
             {
                 request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                // Diferente de Boletos/Convênios/Pix (só Authorization: Bearer), a doc da API
+                // SPB Transferências exige também um header "id_token" separado, com o mesmo
+                // JWT — confirmado em teste real: sem ele o gateway do Sicoob rejeita com 400
+                // "One or more required API parameters are missing" antes de chegar na regra
+                // de negócio da TED.
+                request.Headers.Add("id_token", token);
+
                 return await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             }
         }

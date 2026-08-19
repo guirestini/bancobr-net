@@ -8,8 +8,12 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted.Models
         [JsonProperty("ispb")]
         public string Ispb { get; set; }
 
+        /// <summary>
+        /// String, não number, apesar do que a doc do Sicoob sugere — a API valida
+        /// (ERRO_TAMANHO_NUMEROAGENCIA) que a agência venha com 4 dígitos, zero à esquerda.
+        /// </summary>
         [JsonProperty("issuer")]
-        public int Issuer { get; set; }
+        public string Issuer { get; set; }
 
         [JsonProperty("number")]
         public string Number { get; set; }
