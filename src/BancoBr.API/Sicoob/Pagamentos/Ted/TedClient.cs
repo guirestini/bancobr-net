@@ -244,10 +244,12 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
                 },
                 Date = dataPagamento.ToString("yyyy-MM-dd"),
                 Amount = movimento.ValorPagamento.ToString("0.00", CultureInfo.InvariantCulture),
-                Finalidade = ((int)item.CodigoFinalidadeTED).ToString("D5"),
-                // EXPERIMENTAL: numeroPa = agência de origem, para isolar o
-                // ERRO_TAMANHO_NUMEROAGENCIA.
-                NumeroPa = string.IsNullOrWhiteSpace(item.NumeroPa) ? origem.NumeroAgencia.ToString() : item.NumeroPa,
+                // Sem zero à esquerda — apesar do exemplo da doc ("00000"), o Sicoob rejeita
+                // a finalidade com padding; espera o número puro (ex.: "10", não "00010").
+                Finalidade = ((int)item.CodigoFinalidadeTED).ToString(),
+                // EXPERIMENTAL/TEMPORÁRIO: fixo em "123", só para teste isolado do
+                // ERRO_TAMANHO_NUMEROAGENCIA. Reverter depois do teste.
+                NumeroPa = "123",
                 Historico = item.Historico,
             };
         }
@@ -406,8 +408,40 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
                 // de negócio da TED.
                 request.Headers.Add("id_token", token);
 
+                // DEBUG: coloque um breakpoint nesta linha (a de baixo, "return await...") e
+                // avalie DebugCurl(request) no Watch/Immediate Window para obter o cURL
+                // completo (método, URL, headers e corpo) desta chamada.
                 return await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             }
+        }
+
+        /// <summary>
+        /// DEBUG ONLY: monta o cURL equivalente à requisição, para reproduzir/compartilhar com
+        /// o suporte técnico do banco. Lê request.Content de forma síncrona (.Result) — só
+        /// deve ser chamado a partir do Watch/Immediate Window, parado num breakpoint.
+        /// </summary>
+        private static string DebugCurl(HttpRequestMessage request)
+        {
+            var curl = new StringBuilder();
+            curl.Append("curl -X ").Append(request.Method).Append(" \"").Append(request.RequestUri).Append("\"");
+
+            foreach (var header in request.Headers)
+            {
+                curl.Append(" -H \"").Append(header.Key).Append(": ").Append(string.Join(",", header.Value)).Append("\"");
+            }
+
+            if (request.Content != null)
+            {
+                foreach (var header in request.Content.Headers)
+                {
+                    curl.Append(" -H \"").Append(header.Key).Append(": ").Append(string.Join(",", header.Value)).Append("\"");
+                }
+
+                var body = request.Content.ReadAsStringAsync().Result;
+                curl.Append(" -d '").Append(body).Append("'");
+            }
+
+            return curl.ToString();
         }
 
         /// <summary>
