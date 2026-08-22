@@ -298,8 +298,8 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                var itens = JsonConvert.DeserializeObject<BoletoDDA[]>(body, SerializerSettings);
-                return itens?.Select(MapBoletoDda).ToList();
+                var envelope = JsonConvert.DeserializeObject<ResultadoEnvelope<BoletoDDA[]>>(body, SerializerSettings);
+                return envelope?.Resultado?.Select(MapBoletoDda).ToList();
             }
         }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using BancoBr.API.Base;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
+using BancoBr.API.Sicoob.ContaCorrente;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
 using BancoBr.API.Sicoob.Pagamentos.Convenios;
 using BancoBr.API.Sicoob.Pagamentos.Pix;
@@ -41,6 +42,10 @@ namespace BancoBr.API.Core
             Registrar<PagamentoTedApiBase>(BancoEnum.Sicoob,
                 (clientId, clientSecret, certificateSource, tokenEndpoint) => new TedClient(clientId, clientSecret, certificateSource, tokenEndpoint),
                 (clientId, certificateSource, tokenProvider) => new TedClient(clientId, certificateSource, tokenProvider));
+
+            Registrar<ContaCorrenteApiBase>(BancoEnum.Sicoob,
+                (clientId, clientSecret, certificateSource, tokenEndpoint) => new ExtratoClient(clientId, clientSecret, certificateSource, tokenEndpoint),
+                (clientId, certificateSource, tokenProvider) => new ExtratoClient(clientId, certificateSource, tokenProvider));
         }
 
         private static void Registrar<TApiBase>(BancoEnum banco, Func<string, string, CertificateSource, Uri, TApiBase> comClientSecret, Func<string, CertificateSource, IAccessTokenProvider, TApiBase> comTokenProvider)

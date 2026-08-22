@@ -46,6 +46,14 @@ namespace BancoBr.API.Base
         public abstract Task<Movimento> ConfirmarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Conveniência para o caso sem aprovação humana entre iniciação e confirmação: chama
+        /// <see cref="IniciarPagamentoAsync"/> seguido de <see cref="ConfirmarPagamentoAsync"/>
+        /// no mesmo movimento. Quando o ERP precisa exibir o titular resolvido para confirmação
+        /// antes de pagar, use os dois métodos separadamente.
+        /// </summary>
+        public abstract Task<Movimento> PagarComIniciacaoAsync(Movimento movimento, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Paga um Pix Copia e Cola (QR Code estático ou com vencimento) com execução
         /// direta — ao contrário de <see cref="IniciarPagamentoAsync"/> +
         /// <see cref="ConfirmarPagamentoAsync"/>, não há passo de confirmação separado.

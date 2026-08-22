@@ -258,6 +258,13 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
             return movimento;
         }
 
+        public override async Task<Movimento> PagarComIniciacaoAsync(Movimento movimento, CancellationToken cancellationToken = default)
+        {
+            await IniciarPagamentoAsync(movimento, cancellationToken).ConfigureAwait(false);
+
+            return await ConfirmarPagamentoAsync(movimento, cancellationToken).ConfigureAwait(false);
+        }
+
         #endregion
 
         #region ::. Mapeamento de resposta .::

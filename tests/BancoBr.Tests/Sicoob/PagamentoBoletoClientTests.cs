@@ -290,15 +290,17 @@ namespace BancoBr.Tests.Sicoob
         public async Task ConsultarBoletosDdaAsync_200_MapeiaSituacaoEListaDeItens()
         {
             var json = @"
-            [
-              {
-                ""valorBoleto"": 100.0,
-                ""dataVencimentoBoleto"": ""2026-06-27"",
-                ""codigoTipoSituacaoBoleto"": 1,
-                ""dataEmissao"": ""2026-06-01"",
-                ""numeroCodigoBarras"": ""string""
-              }
-            ]";
+            {
+              ""resultado"": [
+                {
+                  ""valorBoleto"": 100.0,
+                  ""dataVencimentoBoleto"": ""2026-06-27"",
+                  ""codigoTipoSituacaoBoleto"": 1,
+                  ""dataEmissao"": ""2026-06-01"",
+                  ""numeroCodigoBarras"": ""string""
+                }
+              ]
+            }";
             var handler = new FakeHttpMessageHandler(HttpStatusCode.OK, json);
             var client = CriarClient(handler);
 
