@@ -1,4 +1,5 @@
 using System;
+using BancoBr.Common.Enums;
 
 namespace BancoBr.API.Base.Models
 {
@@ -10,11 +11,11 @@ namespace BancoBr.API.Base.Models
         public string TransactionId { get; set; }
 
         /// <summary>
-        /// Valor textual devolvido pelo banco (ex.: "CREDITO"/"DEBITO" ou "C"/"D") — o
-        /// mapeamento para <see cref="Common.Enums"/> equivalente é feito por cada cliente,
-        /// já que o vocabulário exato varia por banco.
+        /// Já normalizado a partir do vocabulário textual devolvido pelo banco (ex.:
+        /// "CREDITO"/"DEBITO" ou "C"/"D") — cada cliente faz esse mapeamento, já que o
+        /// vocabulário exato varia por banco.
         /// </summary>
-        public string Tipo { get; set; }
+        public BancoBrTipoCreditoDebitoEnum Tipo { get; set; }
 
         /// <summary>Sempre positivo — o sinal (crédito/débito) vem em <see cref="Tipo"/>.</summary>
         public decimal Valor { get; set; }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
@@ -10,6 +11,8 @@ using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.ContaCorrente.Models;
 using BancoBr.API.Sicoob.Errors;
+using BancoBr.API.Sicoob.Pagamentos.Boletos.Models;
+using BancoBr.Common.Enums;
 using BancoBr.Common.Instances;
 using Newtonsoft.Json;
 
@@ -114,9 +117,9 @@ namespace BancoBr.API.Sicoob.ContaCorrente
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
 
                 var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                var wire = JsonConvert.DeserializeObject<ExtratoResponse>(body, SerializerSettings);
+                var envelope = JsonConvert.DeserializeObject<ResultadoEnvelope<ExtratoResponse>>(body, SerializerSettings);
 
-                return MapExtrato(wire);
+                return MapExtrato(envelope?.Resultado);
             }
         }
 
@@ -144,7 +147,7 @@ namespace BancoBr.API.Sicoob.ContaCorrente
         private static ExtratoTransacao MapTransacao(TransacaoResponse dto) => new ExtratoTransacao
         {
             TransactionId = dto.TransactionId,
-            Tipo = dto.Tipo,
+            Tipo = MapTipo(dto.Tipo),
             Valor = ParseDecimal(dto.Valor),
             Data = ParseData(dto.Data),
             DataLote = string.IsNullOrWhiteSpace(dto.DataLote) ? (DateTime?)null : ParseData(dto.DataLote),
@@ -153,6 +156,27 @@ namespace BancoBr.API.Sicoob.ContaCorrente
             CpfCnpj = dto.CpfCnpj,
             DescricaoInformacaoComplementar = dto.DescInfComplementar,
         };
+
+        /// <summary>
+        /// Confirmado contra resposta real do Sicoob: o campo "tipo" do extrato vem como
+        /// "CREDITO" ou "DEBITO". Sem fallback aqui — diferente das situações de pagamento
+        /// (que podem cair em "NaoIntegrado"), errar o sinal de um lançamento financeiro é
+        /// pior do que falhar a importação.
+        /// </summary>
+        private static BancoBrTipoCreditoDebitoEnum MapTipo(string tipo)
+        {
+            switch (tipo?.Trim().ToUpperInvariant())
+            {
+                case "CREDITO":
+                    return BancoBrTipoCreditoDebitoEnum.Credito;
+
+                case "DEBITO":
+                    return BancoBrTipoCreditoDebitoEnum.Debito;
+
+                default:
+                    throw new Exception($"Tipo de lançamento não reconhecido no extrato Sicoob: \"{tipo}\".");
+            }
+        }
 
         private static decimal ParseDecimal(string valor)
         {
@@ -163,17 +187,12 @@ namespace BancoBr.API.Sicoob.ContaCorrente
         }
 
         /// <summary>
-        /// ATENÇÃO: o Sicoob devolve as datas do extrato como texto e o formato exato
-        /// ("dd/MM/yyyy" vs. ISO 8601) não está confirmado em documentação disponível neste
-        /// repositório — DEVE SER VALIDADO contra respostas reais do sandbox/produção. Tenta
-        /// "dd/MM/yyyy" (padrão mais comum nas APIs do Sicoob) e cai para um parse genérico
-        /// caso contrário.
+        /// Confirmado contra resposta real do Sicoob: "data" vem como "yyyy-MM-ddTHH:mm" e
+        /// "dataLote" como "yyyy-MM-dd" — ambos ISO 8601, sem timezone. <see cref="DateTime.Parse(string, IFormatProvider, DateTimeStyles)"/>
+        /// já cobre as duas variantes.
         /// </summary>
         private static DateTime ParseData(string data)
         {
-            if (DateTime.TryParseExact(data, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var exata))
-                return exata;
-
             return DateTime.Parse(data, CultureInfo.InvariantCulture, DateTimeStyles.None);
         }
 
@@ -213,23 +232,44 @@ namespace BancoBr.API.Sicoob.ContaCorrente
             }
         }
 
+        /// <summary>
+        /// Diferente de Boletos/Convênios ({ "mensagens": [{ "codigo", "mensagem" }] }), a API
+        /// Conta Corrente devolve erro como { "errors": [{ "code", "title", "detail" }], "meta": {...} }.
+        /// </summary>
         private static async Task EnsureSuccessOrThrowAsync(HttpResponseMessage response)
         {
             if (response.IsSuccessStatusCode)
                 return;
 
             var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            SicoobErrorResponse errorResponse;
+            var mensagens = new List<SicoobMensagem>();
+
             try
             {
-                errorResponse = JsonConvert.DeserializeObject<SicoobErrorResponse>(body, SerializerSettings);
+                var errorResponse = JsonConvert.DeserializeObject<ContaCorrenteErrorResponse>(body, SerializerSettings);
+                if (errorResponse?.Errors != null)
+                {
+                    foreach (var erro in errorResponse.Errors)
+                    {
+                        mensagens.Add(new SicoobMensagem
+                        {
+                            Codigo = erro.Code,
+                            Mensagem = !string.IsNullOrWhiteSpace(erro.Detail) ? erro.Detail : erro.Title,
+                        });
+                    }
+                }
             }
             catch (JsonException)
             {
-                errorResponse = null;
+                // Corpo não é o { "errors": [...] } esperado — cai no fallback abaixo.
             }
 
-            throw new SicoobApiException((int)response.StatusCode, errorResponse?.Mensagens ?? new System.Collections.Generic.List<SicoobMensagem>());
+            if (mensagens.Count == 0 && !string.IsNullOrWhiteSpace(body))
+            {
+                mensagens.Add(new SicoobMensagem { Codigo = ((int)response.StatusCode).ToString(), Mensagem = body });
+            }
+
+            throw new SicoobApiException((int)response.StatusCode, mensagens);
         }
 
         #endregion
