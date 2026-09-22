@@ -27,7 +27,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
     /// mesmo papel que BancoBr.CNAB.Base.Banco tem para os Segmentos, e igualmente por
     /// composição, nunca por herança.
     /// </summary>
-    public class TedClient : PagamentoTedApiBase
+    internal class TedClient : PagamentoTedApiBase
     {
         /// <summary>
         /// Base URL intrínseca a esta API específica do Sicoob (SPB Transferências v2) — não

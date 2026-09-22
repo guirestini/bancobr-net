@@ -27,7 +27,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
     /// de implementação) — mesmo papel que BancoBr.CNAB.Base.Banco tem para os Segmentos, e
     /// igualmente por composição, nunca por herança.
     /// </summary>
-    public class PagamentoBoletoClient : PagamentoBoletoApiBase
+    internal class PagamentoBoletoClient : PagamentoBoletoApiBase
     {
         /// <summary>
         /// Base URL, scopes e rate limit são intrínsecos a esta API específica do Sicoob

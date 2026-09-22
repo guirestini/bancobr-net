@@ -25,7 +25,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
     /// que BancoBr.CNAB.Base.Banco tem para os Segmentos, e igualmente por composição, nunca
     /// por herança.
     /// </summary>
-    public class PagamentoPixClient : PagamentoPixApiBase
+    internal class PagamentoPixClient : PagamentoPixApiBase
     {
         /// <summary>
         /// Base URL, scopes e rate limit são intrínsecos a esta API específica do Sicoob

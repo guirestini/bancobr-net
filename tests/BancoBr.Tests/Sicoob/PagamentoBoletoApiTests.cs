@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using BancoBr.API.Base;
 using BancoBr.API.Core;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
@@ -21,17 +20,17 @@ namespace BancoBr.Tests.Sicoob
         }
 
         [Fact]
-        public void Criar_BancoSicoob_RetornaPagamentoBoletoClient()
+        public void Conectar_BancoSicoob_RetornaBancoApiComPagamentoBoletoClient()
         {
-            var resultado = BancoApi.Criar<PagamentoBoletoApiBase>(BancoEnum.Sicoob, "fake-client-id", CriarCertificateSourceFake(), new FakeOAuthTokenProvider());
+            var resultado = BancoApi.Conectar(BancoEnum.Sicoob, "fake-client-id", CriarCertificateSourceFake(), new FakeOAuthTokenProvider());
 
-            Assert.IsType<PagamentoBoletoClient>(resultado);
+            Assert.IsType<PagamentoBoletoClient>(resultado.Boleto);
         }
 
         [Fact]
-        public void Criar_BancoNaoImplementado_LancaException()
+        public void Conectar_BancoNaoImplementado_LancaException()
         {
-            Assert.Throws<System.Exception>(() => BancoApi.Criar<PagamentoBoletoApiBase>(BancoEnum.BradescoSA, "fake-client-id", CriarCertificateSourceFake(), new FakeOAuthTokenProvider()));
+            Assert.Throws<System.Exception>(() => BancoApi.Conectar(BancoEnum.BradescoSA, "fake-client-id", CriarCertificateSourceFake(), new FakeOAuthTokenProvider()));
         }
     }
 }

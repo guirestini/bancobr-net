@@ -21,7 +21,7 @@ namespace BancoBr.API.Sicoob.ContaCorrente
     /// <summary>
     /// Cliente para a API "Conta Corrente" do Sicoob, v4 (saldo/extrato).
     /// </summary>
-    public class ExtratoClient : ContaCorrenteApiBase
+    internal class ExtratoClient : ContaCorrenteApiBase
     {
         public static readonly Uri BaseUrl = new Uri("https://api.sicoob.com.br/conta-corrente/v4");
 

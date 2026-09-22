@@ -1,4 +1,3 @@
-using BancoBr.API.Base;
 using BancoBr.API.Core;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.Models;
@@ -59,9 +58,10 @@ var numeroConta = long.Parse(numeroContaText!);
 var certificateSource = CertificateSource.FromPfxFile(certPfxPath!, certPassword!);
 var tokenEndpointOverride = string.IsNullOrWhiteSpace(tokenEndpoint) ? null : new Uri(tokenEndpoint);
 
-var client = usarTokenFixo
-    ? BancoApi.Criar<PagamentoBoletoApiBase>(BancoEnum.Sicoob, clientId!, certificateSource, new StaticAccessTokenProvider(accessToken!))
-    : BancoApi.Criar<PagamentoBoletoApiBase>(BancoEnum.Sicoob, clientId!, clientSecret: null, certificateSource, tokenEndpointOverride);
+var banco = usarTokenFixo
+    ? BancoApi.Conectar(BancoEnum.Sicoob, clientId!, certificateSource, new StaticAccessTokenProvider(accessToken!))
+    : BancoApi.Conectar(BancoEnum.Sicoob, clientId!, clientSecret: null, certificateSource, tokenEndpointOverride);
+var client = banco.Boleto;
 
 // A conta pagadora é passada como Correntista, do mesmo jeito que ArquivoCNAB recebe a
 // empresa separada da lista de movimentos.
