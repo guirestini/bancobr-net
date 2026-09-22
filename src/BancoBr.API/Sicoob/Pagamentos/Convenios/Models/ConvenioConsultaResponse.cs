@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// Resultado de GET /arrecadacao/codigo-barras/{codigoBarras}: informações do código de
     /// barras antes do pagamento.
     /// </summary>
-    public class ConvenioConsultaResponse
+    internal class ConvenioConsultaResponse
     {
         [JsonProperty("convenio")]
         public string Convenio { get; set; }

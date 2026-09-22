@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using BancoBr.API.Base;
+using BancoBr.API.Core.Errors;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Errors;
@@ -457,7 +458,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
             }
 
             var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            var mensagens = new List<SicoobMensagem>();
+            var mensagens = new List<MensagemErro>();
 
             try
             {
@@ -466,7 +467,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
                 {
                     foreach (var erro in erros)
                     {
-                        mensagens.Add(new SicoobMensagem
+                        mensagens.Add(new MensagemErro
                         {
                             Codigo = erro.Code,
                             Mensagem = !string.IsNullOrWhiteSpace(erro.Detail) ? erro.Detail : erro.Title,
@@ -481,10 +482,10 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
 
             if (mensagens.Count == 0 && !string.IsNullOrWhiteSpace(body))
             {
-                mensagens.Add(new SicoobMensagem { Codigo = ((int)response.StatusCode).ToString(), Mensagem = body });
+                mensagens.Add(new MensagemErro { Codigo = ((int)response.StatusCode).ToString(), Mensagem = body });
             }
 
-            throw new SicoobApiException((int)response.StatusCode, mensagens);
+            throw new BancoApiException((int)response.StatusCode, mensagens);
         }
 
         #endregion

@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// <summary>
     /// Corpo da requisição de efetivação de um pagamento Pix já iniciado (POST /pagamentos/confirmacao).
     /// </summary>
-    public class RequisicaoEfetivacaoPix
+    internal class RequisicaoEfetivacaoPix
     {
         [JsonProperty("endToEndId")]
         public string EndToEndId { get; set; }

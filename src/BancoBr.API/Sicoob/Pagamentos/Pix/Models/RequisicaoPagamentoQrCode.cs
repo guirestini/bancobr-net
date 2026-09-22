@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// <summary>
     /// Corpo da requisição de pagamento via QR Code (POST /pagamentos/qrcode).
     /// </summary>
-    public class RequisicaoPagamentoQrCode
+    internal class RequisicaoPagamentoQrCode
     {
         [JsonProperty("qrcode")]
         public string QrCode { get; set; }

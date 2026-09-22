@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using BancoBr.API.Base;
+using BancoBr.API.Core.Errors;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.Models;
 using BancoBr.API.Core.OAuth;
@@ -217,7 +218,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 {
                     await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
                 }
-                catch (SicoobApiException ex) when (ex.Mensagens.Any(m => m.Codigo == SicoobErrorCodes.IdempotencyJaUtilizado))
+                catch (BancoApiException ex) when (ex.Mensagens.Any(m => m.Codigo == SicoobErrorCodes.IdempotencyJaUtilizado))
                 {
                     // O pagamento já foi efetivado numa tentativa anterior com a mesma
                     // idempotency key; o comprovante é recuperado em vez de propagar o erro.
@@ -695,7 +696,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
                 errorResponse = null;
             }
 
-            throw new SicoobApiException((int)response.StatusCode, errorResponse?.Mensagens ?? new System.Collections.Generic.List<SicoobMensagem>());
+            throw new BancoApiException((int)response.StatusCode, errorResponse?.Mensagens ?? new System.Collections.Generic.List<MensagemErro>());
         }
 
         #endregion

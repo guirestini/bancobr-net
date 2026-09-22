@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
 {
-    public class CancelamentoRequest
+    internal class CancelamentoRequest
     {
         [JsonProperty("numeroConta")]
         public long NumeroConta { get; set; }

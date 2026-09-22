@@ -5,7 +5,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// <summary>
     /// Corpo de POST /arrecadacao/codigo-barras/{codigoBarras}/pagamentos.
     /// </summary>
-    public class ArrecadacaoPagamentoRequest
+    internal class ArrecadacaoPagamentoRequest
     {
         [JsonProperty("identificacao")]
         public Identificacao Identificacao { get; set; }

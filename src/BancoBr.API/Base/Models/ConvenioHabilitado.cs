@@ -1,7 +1,7 @@
 namespace BancoBr.API.Base.Models
 {
     /// <summary>Convênio habilitado para arrecadação, independente do banco.</summary>
-    public class ConvenioHabilitado
+    internal class ConvenioHabilitado
     {
         public string Identificador { get; set; }
 

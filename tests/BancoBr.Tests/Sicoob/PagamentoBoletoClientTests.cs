@@ -1,6 +1,6 @@
 using System.Net;
 using BancoBr.API.Core.Models;
-using BancoBr.API.Sicoob.Errors;
+using BancoBr.API.Core.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Boletos;
 using BancoBr.Common.Enums;
 using BancoBr.Common.Instances;
@@ -165,7 +165,7 @@ namespace BancoBr.Tests.Sicoob
         }
 
         [Fact]
-        public async Task PagarBoletoAsync_400_LancaSicoobApiException()
+        public async Task PagarBoletoAsync_400_LancaBancoApiException()
         {
             var json = @"
             {
@@ -174,7 +174,7 @@ namespace BancoBr.Tests.Sicoob
             var handler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, json);
             var client = CriarClient(handler);
 
-            var ex = await Assert.ThrowsAsync<SicoobApiException>(() =>
+            var ex = await Assert.ThrowsAsync<BancoApiException>(() =>
                 client.PagarBoletoAsync(CriarMovimento(), CriarOrigem(), IdempotencyKey.New(1234, 1234569, Guid.NewGuid())));
 
             Assert.Equal(400, ex.HttpStatusCode);
@@ -484,8 +484,8 @@ namespace BancoBr.Tests.Sicoob
             Assert.Equal("Pagamento bloqueado", resultados[1].Movimento.DetalheRejeicaoBancoBr);
 
             Assert.False(resultados[2].Sucesso);
-            Assert.IsType<SicoobApiException>(resultados[2].Erro);
-            Assert.Equal("10013", ((SicoobApiException)resultados[2].Erro).Mensagens.Single().Codigo);
+            Assert.IsType<BancoApiException>(resultados[2].Erro);
+            Assert.Equal("10013", ((BancoApiException)resultados[2].Erro).Mensagens.Single().Codigo);
             // O IdLancamento continua acessível para o ERP correlacionar a falha.
             Assert.Equal(itens[2].IdLancamento, resultados[2].IdLancamento);
         }

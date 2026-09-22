@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
 {
-    public class PixViolacao
+    internal class PixViolacao
     {
         [JsonProperty("razao")]
         public string Razao { get; set; }

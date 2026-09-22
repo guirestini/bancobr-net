@@ -8,7 +8,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// consulta de comprovante por idempotency key. O Sicoob envelopa em "resultado",
     /// resolvido internamente pelo PagamentoBoletoClient.
     /// </summary>
-    public class ComprovantePagamento
+    internal class ComprovantePagamento
     {
         [JsonProperty("numeroAgencia")]
         public string NumeroAgencia { get; set; }

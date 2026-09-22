@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.ContaCorrente.Models
     /// Corpo de resposta de GET /conta-corrente/v4/extrato/{mes}/{ano} — ao contrário da API
     /// de pagamentos, não vem envelopado em "resultado".
     /// </summary>
-    public class ExtratoResponse
+    internal class ExtratoResponse
     {
         [JsonProperty("saldoAtual")]
         public string SaldoAtual { get; set; }

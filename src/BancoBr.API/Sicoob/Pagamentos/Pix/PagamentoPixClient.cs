@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using BancoBr.API.Base;
+using BancoBr.API.Core.Errors;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Errors;
@@ -449,7 +450,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
             }
 
             var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            var mensagens = new System.Collections.Generic.List<SicoobMensagem>();
+            var mensagens = new System.Collections.Generic.List<MensagemErro>();
 
             PixErrorResponse problemResponse;
             try
@@ -463,14 +464,14 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
 
             if (problemResponse != null && (!string.IsNullOrEmpty(problemResponse.Title) || !string.IsNullOrEmpty(problemResponse.Detail)))
             {
-                mensagens.Add(new SicoobMensagem { Codigo = problemResponse.Title, Mensagem = problemResponse.Detail });
+                mensagens.Add(new MensagemErro { Codigo = problemResponse.Title, Mensagem = problemResponse.Detail });
             }
 
             if (problemResponse?.Violacoes != null)
             {
                 foreach (var violacao in problemResponse.Violacoes)
                 {
-                    mensagens.Add(new SicoobMensagem { Codigo = violacao.Propriedade, Mensagem = violacao.Razao });
+                    mensagens.Add(new MensagemErro { Codigo = violacao.Propriedade, Mensagem = violacao.Razao });
                 }
             }
 
@@ -494,10 +495,10 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
 
             if (mensagens.Count == 0 && !string.IsNullOrWhiteSpace(body))
             {
-                mensagens.Add(new SicoobMensagem { Codigo = ((int)response.StatusCode).ToString(), Mensagem = body });
+                mensagens.Add(new MensagemErro { Codigo = ((int)response.StatusCode).ToString(), Mensagem = body });
             }
 
-            throw new SicoobApiException((int)response.StatusCode, mensagens);
+            throw new BancoApiException((int)response.StatusCode, mensagens);
         }
 
         #endregion

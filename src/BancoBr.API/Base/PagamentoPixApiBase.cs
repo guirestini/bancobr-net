@@ -16,7 +16,7 @@ namespace BancoBr.API.Base
     /// banco, e aplica a resposta de volta no mesmo objeto — que é então devolvido (mesma
     /// instância, mutada in-place).
     /// </summary>
-    public abstract class PagamentoPixApiBase
+    internal abstract class PagamentoPixApiBase
     {
         protected PagamentoPixApiBase(HttpClient httpClient)
         {

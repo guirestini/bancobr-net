@@ -12,7 +12,7 @@ namespace BancoBr.API.Base
     /// banco — mesmo papel que <see cref="PagamentoBoletoApiBase"/> tem para pagamento de
     /// boletos.
     /// </summary>
-    public abstract class ContaCorrenteApiBase
+    internal abstract class ContaCorrenteApiBase
     {
         protected ContaCorrenteApiBase(HttpClient httpClient)
         {

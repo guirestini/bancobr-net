@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted.Models
     /// Corpo devolvido pelo envio (POST /transferencias, sem envelope) e pela consulta
     /// (GET /transferencias/{codigo}, dentro de "resultado": [...]).
     /// </summary>
-    public class TedRetorno
+    internal class TedRetorno
     {
         [JsonProperty("finalidade")]
         public string Finalidade { get; set; }

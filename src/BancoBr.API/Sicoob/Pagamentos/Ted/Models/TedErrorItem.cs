@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted.Models
     /// usado por Boletos/Convênios, aqui a resposta de erro é um array bruto de objetos
     /// { code, title, detail }.
     /// </summary>
-    public class TedErrorItem
+    internal class TedErrorItem
     {
         [JsonProperty("code")]
         public string Code { get; set; }

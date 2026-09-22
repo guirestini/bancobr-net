@@ -1,8 +1,9 @@
 using Newtonsoft.Json;
 
-namespace BancoBr.API.Sicoob.Errors
+namespace BancoBr.API.Core.Errors
 {
-    public class SicoobMensagem
+    /// <summary>Uma mensagem de erro de negócio, normalizada a partir do formato próprio de cada banco.</summary>
+    public class MensagemErro
     {
         [JsonProperty("mensagem")]
         public string Mensagem { get; set; }

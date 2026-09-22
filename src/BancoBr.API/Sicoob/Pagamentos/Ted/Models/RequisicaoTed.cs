@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 namespace BancoBr.API.Sicoob.Pagamentos.Ted.Models
 {
     /// <summary>Corpo de POST /transferencias.</summary>
-    public class RequisicaoTed
+    internal class RequisicaoTed
     {
         [JsonProperty("debtorAccount")]
         public DebtorAccount DebtorAccount { get; set; }

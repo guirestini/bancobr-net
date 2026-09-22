@@ -22,7 +22,7 @@ namespace BancoBr.API.Base
     /// pagadora, separada do movimento pelo mesmo motivo que ArquivoCNAB recebe o
     /// <see cref="Correntista"/> separado da lista de movimentos.
     /// </summary>
-    public abstract class PagamentoBoletoApiBase
+    internal abstract class PagamentoBoletoApiBase
     {
         protected PagamentoBoletoApiBase(HttpClient httpClient)
         {

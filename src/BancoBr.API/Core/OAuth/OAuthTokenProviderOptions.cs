@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace BancoBr.API.Core.OAuth
 {
-    public class OAuthTokenProviderOptions
+    internal class OAuthTokenProviderOptions
     {
         /// <summary>
         /// Endpoint de emissão de token OAuth2 (client_credentials).

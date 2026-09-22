@@ -8,7 +8,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// na consulta, ou pagamento bloqueado pelo Sicoob) — representados explicitamente em vez
     /// de sobrecarregar um Comprovante nulo com múltiplos significados.
     /// </summary>
-    public class PagamentoBoletoResultado
+    internal class PagamentoBoletoResultado
     {
         public bool PendenteAssinatura { get; }
 

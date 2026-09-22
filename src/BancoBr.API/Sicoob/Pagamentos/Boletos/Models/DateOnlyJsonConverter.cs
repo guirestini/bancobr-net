@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// O Sicoob espera datas no formato yyyy-MM-dd (sem componente de hora) nos payloads
     /// de requisição. O conversor padrão do Newtonsoft.Json grava o horário também.
     /// </summary>
-    public class DateOnlyJsonConverter : JsonConverter
+    internal class DateOnlyJsonConverter : JsonConverter
     {
         private const string Format = "yyyy-MM-dd";
 

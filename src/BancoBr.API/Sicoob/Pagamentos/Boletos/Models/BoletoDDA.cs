@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// <summary>
     /// Item retornado por GET /boletos (consulta de boletos DDA de uma conta corrente).
     /// </summary>
-    public class BoletoDDA
+    internal class BoletoDDA
     {
         [JsonProperty("descricaoTipoPagador")]
         public string DescricaoTipoPagador { get; set; }

@@ -10,7 +10,7 @@ namespace BancoBr.API.Core.Models
     /// mesma key, permitindo que o Sicoob deduplique pagamentos repetidos (ex.: duplo clique do
     /// usuário no ERP).
     /// </summary>
-    public static class IdempotencyKey
+    internal static class IdempotencyKey
     {
         private const int MaxDigitosCooperativa = 4;
         private const int MaxDigitosContaCorrente = 14;

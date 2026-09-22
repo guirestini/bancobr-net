@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.ContaCorrente.Models
     /// usado por Boletos/Convênios, aqui a resposta de erro vem como
     /// { "errors": [{ "code", "title", "detail" }], "meta": { ... } }.
     /// </summary>
-    public class ContaCorrenteErrorItem
+    internal class ContaCorrenteErrorItem
     {
         [JsonProperty("code")]
         public string Code { get; set; }

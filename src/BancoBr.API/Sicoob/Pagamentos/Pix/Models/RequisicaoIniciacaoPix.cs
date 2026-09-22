@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// <summary>
     /// Corpo da requisição de iniciação de pagamento por chave DICT (POST /pagamentos).
     /// </summary>
-    public class RequisicaoIniciacaoPix
+    internal class RequisicaoIniciacaoPix
     {
         [JsonProperty("chave")]
         public string Chave { get; set; }

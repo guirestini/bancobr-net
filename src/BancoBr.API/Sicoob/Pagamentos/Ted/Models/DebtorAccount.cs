@@ -8,7 +8,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted.Models
     /// accountType/personType como texto (CACC/NATURAL_PERSON, ...), não como código
     /// numérico como a API de Boletos.
     /// </summary>
-    public class DebtorAccount
+    internal class DebtorAccount
     {
         [JsonProperty("issuer")]
         public string Issuer { get; set; }

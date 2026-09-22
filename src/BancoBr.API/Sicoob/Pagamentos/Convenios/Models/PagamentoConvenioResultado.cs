@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// quando a transação está pendente de assinatura) — diferente de boleto, este endpoint não
     /// tem um fluxo de duas etapas (consulta + pagamento) embutido no cliente.
     /// </summary>
-    public class PagamentoConvenioResultado
+    internal class PagamentoConvenioResultado
     {
         public bool PendenteAssinatura { get; }
 

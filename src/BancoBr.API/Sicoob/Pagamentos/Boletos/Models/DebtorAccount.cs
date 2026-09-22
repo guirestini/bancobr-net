@@ -5,7 +5,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// <summary>
     /// Conta do associado utilizada para débito do pagamento.
     /// </summary>
-    public class DebtorAccount
+    internal class DebtorAccount
     {
         /// <summary>Número da cooperativa da conta.</summary>
         [JsonProperty("issuer")]

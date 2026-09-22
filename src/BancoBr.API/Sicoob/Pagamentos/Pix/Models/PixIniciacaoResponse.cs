@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// Retorno da iniciação de pagamento por chave DICT (POST /pagamentos) — resolve a
     /// chave para os dados do titular, sem movimentar valores.
     /// </summary>
-    public class PixIniciacaoResponse
+    internal class PixIniciacaoResponse
     {
         [JsonProperty("endToEndId")]
         public string EndToEndId { get; set; }

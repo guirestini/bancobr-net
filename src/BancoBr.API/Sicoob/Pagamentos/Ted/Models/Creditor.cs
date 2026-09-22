@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 namespace BancoBr.API.Sicoob.Pagamentos.Ted.Models
 {
     /// <summary>Beneficiário da TED.</summary>
-    public class Creditor
+    internal class Creditor
     {
         /// <summary>NATURAL_PERSON (pessoa física) ou LEGAL_PERSON (pessoa jurídica).</summary>
         [JsonProperty("personType")]

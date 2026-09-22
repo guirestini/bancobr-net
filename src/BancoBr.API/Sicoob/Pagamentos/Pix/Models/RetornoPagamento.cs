@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// Retorno da consulta (GET /pagamentos/{id}) e da confirmação (POST /pagamentos/confirmacao)
     /// de um pagamento Pix no Sicoob.
     /// </summary>
-    public class RetornoPagamento
+    internal class RetornoPagamento
     {
         [JsonProperty("endToEndId")]
         public string EndToEndId { get; set; }

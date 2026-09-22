@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// Item retornado por GET /arrecadacao/conciliacoes: informações sintéticas das
     /// arrecadações realizadas numa data de movimento.
     /// </summary>
-    public class ConciliacaoItem
+    internal class ConciliacaoItem
     {
         [JsonProperty("situacao")]
         public string Situacao { get; set; }

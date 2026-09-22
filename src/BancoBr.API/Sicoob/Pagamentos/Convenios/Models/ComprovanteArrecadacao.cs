@@ -5,7 +5,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// <summary>
     /// Resultado de GET /arrecadacao/pagamentos/{nsu}/comprovante: segunda via do comprovante.
     /// </summary>
-    public class ComprovanteArrecadacao
+    internal class ComprovanteArrecadacao
     {
         [JsonProperty("comprovante")]
         public string Comprovante { get; set; }

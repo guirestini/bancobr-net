@@ -1,7 +1,7 @@
 using BancoBr.API.Core;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
-using BancoBr.API.Sicoob.Errors;
+using BancoBr.API.Core.Errors;
 using BancoBr.Common.Enums;
 using BancoBr.Common.Instances;
 
@@ -127,7 +127,7 @@ try
 
     return 0;
 }
-catch (SicoobApiException ex)
+catch (BancoApiException ex)
 {
     Console.WriteLine($"Erro de negócio do Sicoob (HTTP {ex.HttpStatusCode}):");
     foreach (var mensagem in ex.Mensagens)

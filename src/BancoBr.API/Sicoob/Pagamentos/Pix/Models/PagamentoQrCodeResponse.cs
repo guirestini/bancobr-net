@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// <summary>
     /// Retorno do pagamento via QR Code (POST /pagamentos/qrcode) no Sicoob.
     /// </summary>
-    public class PagamentoQrCodeResponse
+    internal class PagamentoQrCodeResponse
     {
         [JsonProperty("endToEndId")]
         public string EndToEndId { get; set; }

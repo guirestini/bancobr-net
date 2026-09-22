@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 namespace BancoBr.API.Sicoob.Pagamentos.Ted.Models
 {
     /// <summary>Conta do beneficiário da TED.</summary>
-    public class CreditorAccount
+    internal class CreditorAccount
     {
         [JsonProperty("ispb")]
         public string Ispb { get; set; }

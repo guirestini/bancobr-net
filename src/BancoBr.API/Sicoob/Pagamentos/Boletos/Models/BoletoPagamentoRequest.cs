@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// <summary>
     /// Corpo de POST /boletos/pagamentos/{codigoBarras}.
     /// </summary>
-    public class BoletoPagamentoRequest
+    internal class BoletoPagamentoRequest
     {
         /// <summary>Identificador retornado pela consulta prévia (BoletoConsultaResponse.IdentificadorConsulta).</summary>
         [JsonProperty("identificadorConsulta")]

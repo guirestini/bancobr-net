@@ -17,7 +17,7 @@ namespace BancoBr.API.Base
     /// Diferente de Boleto/Convênio, a API SPB não tem endpoint de consulta prévia por
     /// conta/beneficiário — o envio é direto.
     /// </summary>
-    public abstract class PagamentoTedApiBase
+    internal abstract class PagamentoTedApiBase
     {
         protected PagamentoTedApiBase(HttpClient httpClient)
         {

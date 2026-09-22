@@ -4,7 +4,7 @@ namespace BancoBr.API.Base.Models
     /// Informações sintéticas das arrecadações realizadas numa data de movimento, independente
     /// do banco.
     /// </summary>
-    public class ConciliacaoItem
+    internal class ConciliacaoItem
     {
         public string Situacao { get; set; }
 

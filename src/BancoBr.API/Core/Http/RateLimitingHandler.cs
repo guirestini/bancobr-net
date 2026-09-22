@@ -10,7 +10,7 @@ namespace BancoBr.API.Core.Http
     /// limite (ex.: Pagamentos de Boletos = 2 req/s); por isso a taxa é configurável por instância.
     /// Não implementa retry/backoff pois o Sicoob não documenta esse comportamento.
     /// </summary>
-    public class RateLimitingHandler : DelegatingHandler
+    internal class RateLimitingHandler : DelegatingHandler
     {
         private readonly SemaphoreSlim _semaphore;
         private readonly TimeSpan _interval;

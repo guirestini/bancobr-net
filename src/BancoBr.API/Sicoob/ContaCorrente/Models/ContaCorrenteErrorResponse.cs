@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.ContaCorrente.Models
     /// Envelope de erro da API Conta Corrente (ex.: GET /extrato/{mes}/{ano}):
     /// { "errors": [{ "code", "title", "detail" }], "meta": { "requestDateTime" } }.
     /// </summary>
-    public class ContaCorrenteErrorResponse
+    internal class ContaCorrenteErrorResponse
     {
         [JsonProperty("errors")]
         public List<ContaCorrenteErrorItem> Errors { get; set; }

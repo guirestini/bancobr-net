@@ -8,7 +8,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// Item retornado por GET /arrecadacao/codigo-barras/{codigoBarras}/pagamentos: consulta de
     /// pagamento(s) já realizado(s) para um código de barras numa data de movimento.
     /// </summary>
-    public class ArrecadacaoConsultaItem
+    internal class ArrecadacaoConsultaItem
     {
         [JsonProperty("valorPago")]
         public decimal ValorPago { get; set; }

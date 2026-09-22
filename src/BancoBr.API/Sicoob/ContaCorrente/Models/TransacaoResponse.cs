@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.ContaCorrente.Models
     /// <summary>
     /// Item de "transacoes" devolvido por GET /conta-corrente/v4/extrato/{mes}/{ano}.
     /// </summary>
-    public class TransacaoResponse
+    internal class TransacaoResponse
     {
         [JsonProperty("transactionId")]
         public string TransactionId { get; set; }

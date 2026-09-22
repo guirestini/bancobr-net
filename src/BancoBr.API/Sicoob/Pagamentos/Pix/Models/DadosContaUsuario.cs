@@ -6,7 +6,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// Dados de conta (origem ou destino) retornados pela consulta/confirmação de um
     /// pagamento Pix no Sicoob.
     /// </summary>
-    public class DadosContaUsuario
+    internal class DadosContaUsuario
     {
         [JsonProperty("ispb")]
         public string Ispb { get; set; }

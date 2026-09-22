@@ -7,7 +7,7 @@ namespace BancoBr.API.Base.Models
     /// Resultado de um item processado dentro de um lote. Um item com falha não aborta o
     /// restante do lote — fica registrado aqui para o ERP decidir o que fazer.
     /// </summary>
-    public class PagamentoBoletoLoteResultadoItem
+    internal class PagamentoBoletoLoteResultadoItem
     {
         /// <summary>
         /// O mesmo <see cref="Common.Instances.Movimento"/> enviado no lote, já com o resultado

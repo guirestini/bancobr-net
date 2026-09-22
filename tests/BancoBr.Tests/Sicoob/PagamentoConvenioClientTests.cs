@@ -1,5 +1,5 @@
 using System.Net;
-using BancoBr.API.Sicoob.Errors;
+using BancoBr.API.Core.Errors;
 using BancoBr.API.Sicoob.Pagamentos.Convenios;
 using BancoBr.Common.Enums;
 using BancoBr.Common.Instances;
@@ -138,7 +138,7 @@ namespace BancoBr.Tests.Sicoob
         }
 
         [Fact]
-        public async Task PagarConvenioAsync_400_LancaSicoobApiException()
+        public async Task PagarConvenioAsync_400_LancaBancoApiException()
         {
             var json = @"
             {
@@ -147,7 +147,7 @@ namespace BancoBr.Tests.Sicoob
             var handler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, json);
             var client = CriarClient(handler);
 
-            var ex = await Assert.ThrowsAsync<SicoobApiException>(() =>
+            var ex = await Assert.ThrowsAsync<BancoApiException>(() =>
                 client.PagarConvenioAsync(CriarMovimento(transacao: 123456789), CriarOrigem()));
 
             Assert.Equal(400, ex.HttpStatusCode);
@@ -192,7 +192,7 @@ namespace BancoBr.Tests.Sicoob
         }
 
         [Fact]
-        public async Task PagarConvenioAsync_400ComCodigo10272SemPagamentoCorrespondente_LancaSicoobApiException()
+        public async Task PagarConvenioAsync_400ComCodigo10272SemPagamentoCorrespondente_LancaBancoApiException()
         {
             const string erroJson = @"
                 {
@@ -205,7 +205,7 @@ namespace BancoBr.Tests.Sicoob
                 (HttpStatusCode.OK, pagamentosJson));
             var client = CriarClient(handler);
 
-            var ex = await Assert.ThrowsAsync<SicoobApiException>(() =>
+            var ex = await Assert.ThrowsAsync<BancoApiException>(() =>
                 client.PagarConvenioAsync(CriarMovimento(transacao: 123456789), CriarOrigem()));
 
             Assert.Equal("10272", ex.Mensagens.Single().Codigo);

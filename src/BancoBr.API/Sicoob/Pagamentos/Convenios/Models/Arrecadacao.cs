@@ -8,7 +8,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// Dados da arrecadação retornados dentro de ArrecadacaoResultado.Arrecadacao
     /// (resposta de POST /arrecadacao/codigo-barras/{codigoBarras}/pagamentos).
     /// </summary>
-    public class Arrecadacao
+    internal class Arrecadacao
     {
         [JsonProperty("valorPago")]
         public decimal ValorPago { get; set; }

@@ -8,7 +8,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// Sicoob — formato diferente do { "mensagens": [...] } usado pelas APIs de
     /// Boletos/Convênios.
     /// </summary>
-    public class PixErrorResponse
+    internal class PixErrorResponse
     {
         [JsonProperty("type")]
         public string Type { get; set; }

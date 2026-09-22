@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos.Models
     /// Resultado de GET /boletos/{codigoBarras}. O Sicoob envelopa a resposta em "resultado";
     /// o envelope é resolvido internamente pelo PagamentoBoletoClient.
     /// </summary>
-    public class BoletoConsultaResponse
+    internal class BoletoConsultaResponse
     {
         [JsonProperty("numeroInstituicaoEmissora")]
         public int NumeroInstituicaoEmissora { get; set; }

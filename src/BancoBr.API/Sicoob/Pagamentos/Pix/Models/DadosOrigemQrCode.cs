@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// Diferente de <see cref="DadosContaUsuario"/> (retornado pela consulta/confirmação),
     /// este endpoint não aceita "chaveDict"/"boolFavorecido" no objeto "origem".
     /// </summary>
-    public class DadosOrigemQrCode
+    internal class DadosOrigemQrCode
     {
         [JsonProperty("ispb")]
         public string Ispb { get; set; }

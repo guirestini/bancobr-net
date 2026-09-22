@@ -7,7 +7,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// <summary>
     /// Dados de pagamento enviados no corpo de POST /arrecadacao/codigo-barras/{codigoBarras}/pagamentos.
     /// </summary>
-    public class PagamentoConvenio
+    internal class PagamentoConvenio
     {
         [JsonProperty("valorPago")]
         public decimal ValorPago { get; set; }

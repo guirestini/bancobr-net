@@ -5,7 +5,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix.Models
     /// <summary>
     /// Dados do titular da chave Pix resolvida pela iniciação (POST /pagamentos).
     /// </summary>
-    public class PixProprietario
+    internal class PixProprietario
     {
         [JsonProperty("identificador")]
         public string Identificador { get; set; }

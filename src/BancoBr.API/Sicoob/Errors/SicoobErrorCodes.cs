@@ -1,7 +1,7 @@
 namespace BancoBr.API.Sicoob.Errors
 {
     /// <summary>
-    /// Códigos de erro de negócio do Sicoob (campo "codigo" em SicoobMensagem) tratados
+    /// Códigos de erro de negócio do Sicoob (campo "codigo" em MensagemErro) tratados
     /// explicitamente pelos clients, em vez de propagados como exceção genérica.
     /// </summary>
     internal static class SicoobErrorCodes

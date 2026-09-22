@@ -5,7 +5,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// <summary>
     /// Resultado de POST /arrecadacao/codigo-barras/{codigoBarras}/pagamentos (HTTP 200).
     /// </summary>
-    public class ArrecadacaoResultado
+    internal class ArrecadacaoResultado
     {
         /// <summary>Comprovante de pagamento em Base64.</summary>
         [JsonProperty("comprovante")]

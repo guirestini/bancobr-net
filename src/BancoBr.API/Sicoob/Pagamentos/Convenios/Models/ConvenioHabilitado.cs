@@ -5,7 +5,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// <summary>
     /// Item retornado por GET /arrecadacao/convenios-habilitados.
     /// </summary>
-    public class ConvenioHabilitado
+    internal class ConvenioHabilitado
     {
         [JsonProperty("identificador")]
         public string Identificador { get; set; }

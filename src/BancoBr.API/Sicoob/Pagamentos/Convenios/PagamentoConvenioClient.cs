@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using BancoBr.API.Base;
+using BancoBr.API.Core.Errors;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Sicoob.Errors;
@@ -182,7 +183,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
                 {
                     await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
                 }
-                catch (SicoobApiException ex) when (ex.Mensagens.Any(m => m.Codigo == SicoobErrorCodes.IdempotencyJaUtilizado))
+                catch (BancoApiException ex) when (ex.Mensagens.Any(m => m.Codigo == SicoobErrorCodes.IdempotencyJaUtilizado))
                 {
                     return await RecuperarPagamentoJaEfetivadoAsync(movimento, item, wireRequest, cancellationToken).ConfigureAwait(false);
                 }
@@ -219,9 +220,9 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             var encontrado = pagamentos?.FirstOrDefault(p => ((MovimentoItemPagamentoConvenioCodigoBarra)p.MovimentoItem).Transacao == wireRequest.Transacao);
             if (encontrado == null)
             {
-                throw new SicoobApiException((int)System.Net.HttpStatusCode.Conflict, new List<SicoobMensagem>
+                throw new BancoApiException((int)System.Net.HttpStatusCode.Conflict, new List<MensagemErro>
                 {
-                    new SicoobMensagem
+                    new MensagemErro
                     {
                         Codigo = SicoobErrorCodes.IdempotencyJaUtilizado,
                         Mensagem = "Pagamento de convênio já efetivado, mas não foi possível localizar o comprovante para recuperação.",
@@ -256,7 +257,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             return movimento;
         }
 
-        public override async Task<IReadOnlyList<Movimento>> ConsultarPagamentosAsync(string codigoBarras, long instituicao, DateTime dataMovimento, long? transacao = null, CancellationToken cancellationToken = default)
+        internal override async Task<IReadOnlyList<Movimento>> ConsultarPagamentosAsync(string codigoBarras, long instituicao, DateTime dataMovimento, long? transacao = null, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}arrecadacao/codigo-barras/{codigoBarras}/pagamentos?instituicao={instituicao}&dataMovimento={dataMovimento:yyyy-MM-dd}";
             if (transacao.HasValue)
@@ -539,7 +540,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
                 errorResponse = null;
             }
 
-            throw new SicoobApiException((int)response.StatusCode, errorResponse?.Mensagens ?? new List<SicoobMensagem>());
+            throw new BancoApiException((int)response.StatusCode, errorResponse?.Mensagens ?? new List<MensagemErro>());
         }
 
         #endregion

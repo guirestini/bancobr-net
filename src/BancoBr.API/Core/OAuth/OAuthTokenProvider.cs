@@ -12,7 +12,7 @@ namespace BancoBr.API.Core.OAuth
     /// O HttpClient informado deve já estar configurado com o certificado mTLS quando exigido
     /// pela API (o próprio endpoint de token do Sicoob exige o certificado).
     /// </summary>
-    public class OAuthTokenProvider : IAccessTokenProvider
+    internal class OAuthTokenProvider : IAccessTokenProvider
     {
         private readonly HttpClient _httpClient;
         private readonly OAuthTokenProviderOptions _options;

@@ -5,7 +5,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios.Models
     /// <summary>
     /// Identificação da instituição e unidade correspondente ao pagamento de convênio.
     /// </summary>
-    public class Identificacao
+    internal class Identificacao
     {
         [JsonProperty("instituicao")]
         public long Instituicao { get; set; }

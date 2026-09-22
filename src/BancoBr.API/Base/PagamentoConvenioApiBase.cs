@@ -18,7 +18,7 @@ namespace BancoBr.API.Base
     /// <see cref="MovimentoItemPagamentoConvenioCodigoBarra"/> como
     /// <see cref="Movimento.MovimentoItem"/>).
     /// </summary>
-    public abstract class PagamentoConvenioApiBase
+    internal abstract class PagamentoConvenioApiBase
     {
         protected PagamentoConvenioApiBase(HttpClient httpClient)
         {
@@ -55,7 +55,7 @@ namespace BancoBr.API.Base
         /// mesmos campos de um pagamento de convênio, então devolve <see cref="Movimento"/>
         /// (com <see cref="MovimentoItemPagamentoConvenioCodigoBarra"/>) em vez de um DTO à parte.
         /// </summary>
-        public abstract Task<IReadOnlyList<Movimento>> ConsultarPagamentosAsync(string codigoBarras, long instituicao, DateTime dataMovimento, long? transacao = null, CancellationToken cancellationToken = default);
+        internal abstract Task<IReadOnlyList<Movimento>> ConsultarPagamentosAsync(string codigoBarras, long instituicao, DateTime dataMovimento, long? transacao = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Dado de referência em nível de conta (síntese das arrecadações de uma data).
