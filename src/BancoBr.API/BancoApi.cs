@@ -15,7 +15,7 @@ using BancoBr.API.Sicoob.Pagamentos.Ted;
 using BancoBr.Common.Enums;
 using BancoBr.Common.Instances;
 
-namespace BancoBr.API.Core
+namespace BancoBr.API
 {
     /// <summary>
     /// Ponto de entrada único da BancoBr.API: <see cref="Conectar(BancoEnum, string, string, CertificateSource, Uri)"/>

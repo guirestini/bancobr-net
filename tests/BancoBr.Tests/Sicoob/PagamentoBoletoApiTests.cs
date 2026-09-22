@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using BancoBr.API.Core;
+using BancoBr.API;
 using BancoBr.API.Core.Http;
 using BancoBr.Common.Enums;
 using Xunit;

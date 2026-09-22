@@ -1,9 +1,9 @@
-using BancoBr.API.Core;
 using BancoBr.API.Core.Http;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Core.Errors;
 using BancoBr.Common.Enums;
 using BancoBr.Common.Instances;
+using BancoBr.API;
 
 // Console standalone para validar a integração Sicoob (PagamentoBoletoClient) contra um
 // ambiente real (sandbox/homologação), sem depender de um ERP. Nenhuma credencial é lida
