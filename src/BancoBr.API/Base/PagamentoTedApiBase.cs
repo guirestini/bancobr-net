@@ -32,18 +32,18 @@ namespace BancoBr.API.Base
         /// <see cref="ConsultarTedAsync"/>; o idAgendamento (usado para cancelar) fica em
         /// <see cref="MovimentoItemTransferenciaTED.IdAgendamento"/>.
         /// </summary>
-        public abstract Task<Movimento> PagarTedAsync(Movimento movimento, Correntista origem, string idempotencyKey, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> PagarTedAsync(Movimento movimento, Correntista origem, string idempotencyKey, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Consulta a TED identificada por <see cref="Movimento.NumeroDocumentoNoBanco"/>
         /// (numeroControleIF, devolvido por <see cref="PagarTedAsync"/>).
         /// </summary>
-        public abstract Task<Movimento> ConsultarTedAsync(Movimento movimento, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> ConsultarTedAsync(Movimento movimento, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Cancela o agendamento de uma TED ainda não liquidada, identificada por
         /// <see cref="MovimentoItemTransferenciaTED.IdAgendamento"/>.
         /// </summary>
-        public abstract Task<Movimento> CancelarAgendamentoAsync(Movimento movimento, string idempotencyKey, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> CancelarAgendamentoAsync(Movimento movimento, string idempotencyKey, CancellationToken cancellationToken = default);
     }
 }

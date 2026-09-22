@@ -132,7 +132,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
 
         #region ::. Operações .::
 
-        public override async Task<Movimento> ConsultarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> ConsultarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default)
         {
             if (movimento == null) throw new ArgumentNullException(nameof(movimento));
 
@@ -145,7 +145,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
             return AplicarRetornoPagamento(movimento, dto);
         }
 
-        public override async Task<Movimento> IniciarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> IniciarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default)
         {
             if (movimento == null) throw new ArgumentNullException(nameof(movimento));
 
@@ -185,7 +185,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
             return movimento;
         }
 
-        public override async Task<Movimento> ConfirmarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> ConfirmarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default)
         {
             if (movimento == null) throw new ArgumentNullException(nameof(movimento));
 
@@ -207,7 +207,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
             return AplicarRetornoPagamento(movimento, dto);
         }
 
-        public override async Task<Movimento> PagarViaQrCodeAsync(Correntista origem, Movimento movimento, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> PagarViaQrCodeAsync(Correntista origem, Movimento movimento, CancellationToken cancellationToken = default)
         {
             if (movimento == null) throw new ArgumentNullException(nameof(movimento));
             if (origem == null) throw new ArgumentNullException(nameof(origem));
@@ -258,7 +258,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Pix
             return movimento;
         }
 
-        public override async Task<Movimento> PagarComIniciacaoAsync(Movimento movimento, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> PagarComIniciacaoAsync(Movimento movimento, CancellationToken cancellationToken = default)
         {
             await IniciarPagamentoAsync(movimento, cancellationToken).ConfigureAwait(false);
 

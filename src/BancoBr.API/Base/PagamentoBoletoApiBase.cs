@@ -37,14 +37,14 @@ namespace BancoBr.API.Base
         /// não encontra o boleto ou bloqueia o pagamento, o motivo fica em
         /// <see cref="Movimento.SituacaoBancoBr"/> + <see cref="Movimento.DetalheRejeicaoBancoBr"/>.
         /// </summary>
-        public abstract Task<Movimento> ConsultarBoletoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> ConsultarBoletoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Paga um boleto já consultado — exige o
         /// <see cref="MovimentoItemPagamentoTituloCodigoBarra.IdentificadorConsulta"/> devolvido
         /// pela consulta prévia.
         /// </summary>
-        public abstract Task<Movimento> PagarBoletoAsync(Movimento movimento, Correntista origem, string idempotencyKey, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> PagarBoletoAsync(Movimento movimento, Correntista origem, string idempotencyKey, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Conveniência para o caso sem aprovação humana entre consulta e pagamento: consulta o
@@ -52,38 +52,40 @@ namespace BancoBr.API.Base
         /// IdentificadorConsulta retornado) e a envia. Quando o ERP precisa exibir o valor para
         /// confirmação antes de pagar, use ConsultarBoletoAsync e PagarBoletoAsync separadamente.
         /// </summary>
-        public abstract Task<Movimento> PagarBoletoComConsultaAsync(Movimento movimento, Correntista origem, Guid idLancamento, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> PagarBoletoComConsultaAsync(Movimento movimento, Correntista origem, Guid idLancamento, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Paga vários boletos em sequência (bancos sem endpoint de lote geram uma consulta + um
         /// pagamento como chamadas HTTP separadas, throttladas pelo rate limit já configurado no
         /// cliente). Um item com erro não interrompe os demais.
         /// </summary>
-        public abstract Task<IReadOnlyList<PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<(Movimento Movimento, Guid IdLancamento)> itens, Correntista origem, CancellationToken cancellationToken = default);
+        internal abstract Task<IReadOnlyList<PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<(Movimento Movimento, Guid IdLancamento)> itens, Correntista origem, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Consulta o comprovante do pagamento cujo identificador no banco está em
         /// <see cref="Movimento.NumeroDocumentoNoBanco"/>.
         /// </summary>
-        public abstract Task<Movimento> ConsultarComprovantePorIdAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> ConsultarComprovantePorIdAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Cancela o agendamento do pagamento cujo identificador no banco está em
         /// <see cref="Movimento.NumeroDocumentoNoBanco"/>.
         /// </summary>
-        public abstract Task<Movimento> CancelarAgendamentoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> CancelarAgendamentoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Recupera o comprovante de um pagamento pela idempotency key usada no envio. Como não
         /// há um movimento de entrada (o cenário típico é recuperar um pagamento cujo retorno se
         /// perdeu), devolve um <see cref="Movimento"/> novo montado a partir do comprovante.
         /// </summary>
-        public abstract Task<Movimento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Consulta de lista (boletos DDA com vencimento/pagamento num intervalo) — não
-        /// corresponde a um único <see cref="Movimento"/>, por isso mantém o contrato próprio.
+        /// Consulta de lista (boletos DDA com vencimento/pagamento num intervalo) — não parte de
+        /// um único <see cref="Movimento"/> de entrada, mas cada item devolvido vira um
+        /// <see cref="Movimento"/> com <see cref="MovimentoItemDDA"/>, como qualquer outra
+        /// operação.
         /// </summary>
-        public abstract Task<IReadOnlyList<BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, SituacaoBoletoEnum situacao, TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default);
+        internal abstract Task<IReadOnlyList<Movimento>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, SituacaoBoletoEnum situacao, TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default);
     }
 }

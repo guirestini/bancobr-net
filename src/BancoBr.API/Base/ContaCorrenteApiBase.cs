@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using BancoBr.API.Base.Models;
+using BancoBr.Common.Instances;
 
 namespace BancoBr.API.Base
 {
@@ -20,10 +22,14 @@ namespace BancoBr.API.Base
         protected HttpClient HttpClient { get; }
 
         /// <summary>
-        /// Consulta o extrato da conta no mês/ano informado. <paramref name="diaInicial"/> e
-        /// <paramref name="diaFinal"/> recortam o período dentro daquele mês (nulos = mês
-        /// inteiro). <paramref name="agruparCnab"/> agrupa o movimento proveniente de CNAB.
+        /// Consulta o extrato da conta no mês/ano informado. O primeiro <see cref="Movimento"/>
+        /// da lista traz o saldo do período (<see cref="MovimentoItemExtratoSaldo"/> — o
+        /// Sicoob não dá saldo por lançamento, só do período inteiro); os demais são um por
+        /// lançamento, com <see cref="MovimentoItemExtratoTransacao"/>.
+        /// <paramref name="diaInicial"/> e <paramref name="diaFinal"/> recortam o período dentro
+        /// daquele mês (nulos = mês inteiro). <paramref name="agruparCnab"/> agrupa o movimento
+        /// proveniente de CNAB.
         /// </summary>
-        public abstract Task<Extrato> ConsultarExtratoAsync(long numeroContaCorrente, int mes, int ano, int? diaInicial, int? diaFinal, bool agruparCnab, CancellationToken cancellationToken = default);
+        internal abstract Task<IReadOnlyList<Movimento>> ConsultarExtratoAsync(long numeroContaCorrente, int mes, int ano, int? diaInicial, int? diaFinal, bool agruparCnab, CancellationToken cancellationToken = default);
     }
 }

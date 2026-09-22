@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using BancoBr.API.Core;
 using BancoBr.API.Core.Http;
-using BancoBr.API.Sicoob.Pagamentos.Boletos;
 using BancoBr.Common.Enums;
 using Xunit;
 
@@ -20,11 +19,11 @@ namespace BancoBr.Tests.Sicoob
         }
 
         [Fact]
-        public void Conectar_BancoSicoob_RetornaBancoApiComPagamentoBoletoClient()
+        public void Conectar_BancoSicoob_RetornaBancoApi()
         {
             var resultado = BancoApi.Conectar(BancoEnum.Sicoob, "fake-client-id", CriarCertificateSourceFake(), new FakeOAuthTokenProvider());
 
-            Assert.IsType<PagamentoBoletoClient>(resultado.Boleto);
+            Assert.NotNull(resultado);
         }
 
         [Fact]

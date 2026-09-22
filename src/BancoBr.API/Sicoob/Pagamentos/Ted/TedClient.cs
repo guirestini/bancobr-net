@@ -129,7 +129,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
 
         #region ::. Operações .::
 
-        public override async Task<Movimento> PagarTedAsync(Movimento movimento, Correntista origem, string idempotencyKey, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> PagarTedAsync(Movimento movimento, Correntista origem, string idempotencyKey, CancellationToken cancellationToken = default)
         {
             if (movimento == null) throw new ArgumentNullException(nameof(movimento));
             if (origem == null) throw new ArgumentNullException(nameof(origem));
@@ -164,7 +164,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
             }
         }
 
-        public override async Task<Movimento> ConsultarTedAsync(Movimento movimento, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> ConsultarTedAsync(Movimento movimento, CancellationToken cancellationToken = default)
         {
             if (movimento == null) throw new ArgumentNullException(nameof(movimento));
 
@@ -181,7 +181,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Ted
             return AplicarRetorno(movimento, item, dto);
         }
 
-        public override async Task<Movimento> CancelarAgendamentoAsync(Movimento movimento, string idempotencyKey, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> CancelarAgendamentoAsync(Movimento movimento, string idempotencyKey, CancellationToken cancellationToken = default)
         {
             if (movimento == null) throw new ArgumentNullException(nameof(movimento));
 

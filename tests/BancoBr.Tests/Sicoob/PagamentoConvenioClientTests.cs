@@ -235,8 +235,8 @@ namespace BancoBr.Tests.Sicoob
             var resultado = await client.ConsultarPagamentosAsync(CodigoBarras, 1234, new DateTime(2026, 6, 29));
 
             Assert.Single(resultado);
-            Assert.Equal("Recebido", resultado[0].Situacao.Descricao);
-            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado[0].BancoBrSituacao);
+            Assert.Equal("Recebido", resultado[0].DetalheRejeicaoBancoBr);
+            Assert.Equal(BancoBrSituacaoEnum.Efetivado, resultado[0].SituacaoBancoBr);
         }
 
         [Fact]
@@ -262,7 +262,7 @@ namespace BancoBr.Tests.Sicoob
 
             var resultado = await client.ConsultarPagamentosAsync(CodigoBarras, 1234, new DateTime(2026, 6, 29));
 
-            Assert.Equal(BancoBrSituacaoEnum.NaoIntegrado, resultado[0].BancoBrSituacao);
+            Assert.Equal(BancoBrSituacaoEnum.NaoIntegrado, resultado[0].SituacaoBancoBr);
         }
 
         [Fact]
@@ -288,7 +288,7 @@ namespace BancoBr.Tests.Sicoob
 
             var resultado = await client.ConsultarPagamentosAsync(CodigoBarras, 1234, new DateTime(2026, 6, 29));
 
-            Assert.Equal(BancoBrSituacaoEnum.Rejeitado, resultado[0].BancoBrSituacao);
+            Assert.Equal(BancoBrSituacaoEnum.Rejeitado, resultado[0].SituacaoBancoBr);
         }
 
         [Fact]

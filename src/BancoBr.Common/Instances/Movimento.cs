@@ -356,4 +356,155 @@ namespace BancoBr.Common.Instances
 
         #endregion
     }
+
+    public class MovimentoItemDDA : MovimentoItem
+    {
+        public string DescricaoTipoPagador { get; set; }
+
+        public string TipoPessoaBeneficiario { get; set; }
+
+        public string NumeroCpfCnpjBeneficiario { get; set; }
+
+        public string NomeRazaoSocialBeneficiario { get; set; }
+
+        public string TipoPessoaPagador { get; set; }
+
+        public string NumeroCpfCnpjPagador { get; set; }
+
+        public string NomeRazaoSocialPagador { get; set; }
+
+        public string NomeFantasiaPagador { get; set; }
+
+        public string DescricaoLogradouroPagador { get; set; }
+
+        public string DescricaoCidadePagador { get; set; }
+
+        public string SiglaUfPagador { get; set; }
+
+        public string NumeroCepPagador { get; set; }
+
+        public string TipoPessoaAvalista { get; set; }
+
+        public string NumeroCpfCnpjAvalista { get; set; }
+
+        public string NomeAvalista { get; set; }
+
+        public decimal ValorBoleto { get; set; }
+
+        public DateTime DataVencimentoBoleto { get; set; }
+
+        public int CodigoTipoSituacaoBoleto { get; set; }
+
+        public string DescricaoSituacaoBoleto { get; set; }
+
+        public long NumeroIdentificadorBoletoCip { get; set; }
+
+        public string NumeroCodigoBarras { get; set; }
+
+        public string NumeroCpfCnpjPagadorEletronico { get; set; }
+
+        public bool Aceite { get; set; }
+
+        public string NumeroNossoNumero { get; set; }
+
+        public string NumeroDocumento { get; set; }
+
+        public DateTime? DataPagamento { get; set; }
+
+        public decimal? ValorPagamento { get; set; }
+
+        public int CodigoEspecieDocumento { get; set; }
+
+        public DateTime DataEmissao { get; set; }
+
+        public string DataLimitePagamento { get; set; }
+
+        public int CodigoTipoJuros { get; set; }
+
+        public DateTime? DataJuros { get; set; }
+
+        public decimal ValorPercentualJuros { get; set; }
+
+        public int CodigoTipoMulta { get; set; }
+
+        public DateTime? DataMulta { get; set; }
+
+        public decimal ValorPercentualMulta { get; set; }
+
+        public decimal ValorAbatimento { get; set; }
+
+        public string CodigoTipoDesconto1 { get; set; }
+
+        public DateTime? DataDesconto1 { get; set; }
+
+        public decimal ValorPercentualDesconto1 { get; set; }
+
+        public string CodigoTipoDesconto2 { get; set; }
+
+        public string DataDesconto2 { get; set; }
+
+        public decimal ValorPercentualDesconto2 { get; set; }
+
+        public string CodigoTipoDesconto3 { get; set; }
+
+        public string DataDesconto3 { get; set; }
+
+        public decimal ValorPercentualDesconto3 { get; set; }
+
+        public int NumeroDiasProtesto { get; set; }
+
+        public int QuantidadePagamentoParcial { get; set; }
+
+        public int CodigoAutorizacaoValorDivergente { get; set; }
+
+        public string CodigoIndicadorValorMaximo { get; set; }
+
+        public decimal ValorPercentualMaximo { get; set; }
+
+        public string CodigoIndicadorValorMinimo { get; set; }
+
+        public decimal ValorPercentualMinimo { get; set; }
+    }
+
+    public class MovimentoItemExtratoSaldo : MovimentoItem
+    {
+        public decimal SaldoAtual { get; set; }
+
+        public decimal SaldoBloqueado { get; set; }
+
+        public decimal SaldoLimite { get; set; }
+
+        public decimal SaldoAnterior { get; set; }
+
+        public decimal SaldoBloqueioJudicial { get; set; }
+
+        public decimal SaldoBloqueioJudicialAnterior { get; set; }
+    }
+
+    public class MovimentoItemExtratoTransacao : MovimentoItem
+    {
+        public string TransactionId { get; set; }
+
+        /// <summary>
+        /// Já normalizado a partir do vocabulário textual devolvido pelo banco (ex.:
+        /// "CREDITO"/"DEBITO" ou "C"/"D") — cada cliente faz esse mapeamento, já que o
+        /// vocabulário exato varia por banco.
+        /// </summary>
+        public BancoBrTipoCreditoDebitoEnum Tipo { get; set; }
+
+        /// <summary>Sempre positivo — o sinal (crédito/débito) vem em <see cref="Tipo"/>.</summary>
+        public decimal Valor { get; set; }
+
+        public DateTime Data { get; set; }
+
+        public DateTime? DataLote { get; set; }
+
+        public string Descricao { get; set; }
+
+        public string NumeroDocumento { get; set; }
+
+        public string CpfCnpj { get; set; }
+
+        public string DescricaoInformacaoComplementar { get; set; }
+    }
 }

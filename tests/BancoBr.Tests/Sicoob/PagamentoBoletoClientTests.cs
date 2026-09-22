@@ -312,7 +312,8 @@ namespace BancoBr.Tests.Sicoob
                 BancoBr.API.Base.Models.TipoDataConsultaEnum.Vencimento);
 
             Assert.Single(resultado);
-            Assert.Equal(1, resultado[0].CodigoTipoSituacaoBoleto);
+            var item = Assert.IsType<MovimentoItemDDA>(resultado[0].MovimentoItem);
+            Assert.Equal(1, item.CodigoTipoSituacaoBoleto);
         }
 
         [Fact]

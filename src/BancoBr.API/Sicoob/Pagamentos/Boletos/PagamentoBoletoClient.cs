@@ -124,7 +124,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
 
         #region ::. Operações .::
 
-        public override async Task<Movimento> ConsultarBoletoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> ConsultarBoletoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
         {
             var item = ExtrairItem(movimento);
             if (origem == null) throw new ArgumentNullException(nameof(origem));
@@ -143,7 +143,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return movimento;
         }
 
-        public override async Task<Movimento> PagarBoletoComConsultaAsync(Movimento movimento, Correntista origem, Guid idLancamento, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> PagarBoletoComConsultaAsync(Movimento movimento, Correntista origem, Guid idLancamento, CancellationToken cancellationToken = default)
         {
             var item = ExtrairItem(movimento);
             if (origem == null) throw new ArgumentNullException(nameof(origem));
@@ -163,7 +163,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return await PagarBoletoAsync(movimento, origem, idempotencyKey, cancellationToken).ConfigureAwait(false);
         }
 
-        public override async Task<IReadOnlyList<Base.Models.PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<(Movimento Movimento, Guid IdLancamento)> itens, Correntista origem, CancellationToken cancellationToken = default)
+        internal override async Task<IReadOnlyList<Base.Models.PagamentoBoletoLoteResultadoItem>> PagarLoteBoletosAsync(IEnumerable<(Movimento Movimento, Guid IdLancamento)> itens, Correntista origem, CancellationToken cancellationToken = default)
         {
             if (itens == null) throw new ArgumentNullException(nameof(itens));
 
@@ -190,7 +190,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return resultados;
         }
 
-        public override async Task<Movimento> PagarBoletoAsync(Movimento movimento, Correntista origem, string idempotencyKey, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> PagarBoletoAsync(Movimento movimento, Correntista origem, string idempotencyKey, CancellationToken cancellationToken = default)
         {
             var item = ExtrairItem(movimento);
             if (origem == null) throw new ArgumentNullException(nameof(origem));
@@ -231,7 +231,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             }
         }
 
-        public override async Task<Movimento> ConsultarComprovantePorIdAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> ConsultarComprovantePorIdAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
         {
             var item = ExtrairItem(movimento);
             if (origem == null) throw new ArgumentNullException(nameof(origem));
@@ -245,7 +245,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return AplicarComprovante(movimento, item, comprovante);
         }
 
-        public override async Task<Movimento> CancelarAgendamentoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> CancelarAgendamentoAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
         {
             if (movimento == null) throw new ArgumentNullException(nameof(movimento));
             if (origem == null) throw new ArgumentNullException(nameof(origem));
@@ -267,7 +267,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return movimento;
         }
 
-        public override async Task<Movimento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> ConsultarComprovantePorIdempotencyAsync(string idempotencyKey, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos/pagamentos/{idempotencyKey}/idempotency/comprovantes";
             var comprovante = await ConsultarComprovanteWireAsync(url, cancellationToken).ConfigureAwait(false);
@@ -284,7 +284,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             return AplicarComprovante(movimento, (MovimentoItemPagamentoTituloCodigoBarra)movimento.MovimentoItem, comprovante);
         }
 
-        public override async Task<IReadOnlyList<Base.Models.BoletoDDA>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, Base.Models.SituacaoBoletoEnum situacao, Base.Models.TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)
+        internal override async Task<IReadOnlyList<Movimento>> ConsultarBoletosDdaAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, Base.Models.SituacaoBoletoEnum situacao, Base.Models.TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}boletos?numeroConta={numeroConta}&dataInicial={dataInicial:yyyy-MM-dd}&dataFinal={dataFinal:yyyy-MM-dd}&situacao={(int)situacao}&tipoData={(int)tipoData}";
 
@@ -292,7 +292,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                 {
-                    return Array.Empty<Base.Models.BoletoDDA>();
+                    return Array.Empty<Movimento>();
                 }
 
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
@@ -553,61 +553,64 @@ namespace BancoBr.API.Sicoob.Pagamentos.Boletos
             }
         }
 
-        private static Base.Models.BoletoDDA MapBoletoDda(BoletoDDA dto) => new Base.Models.BoletoDDA
+        private static Movimento MapBoletoDda(BoletoDDA dto) => new Movimento
         {
-            DescricaoTipoPagador = dto.DescricaoTipoPagador,
-            TipoPessoaBeneficiario = dto.TipoPessoaBeneficiario,
-            NumeroCpfCnpjBeneficiario = dto.NumeroCpfCnpjBeneficiario,
-            NomeRazaoSocialBeneficiario = dto.NomeRazaoSocialBeneficiario,
-            TipoPessoaPagador = dto.TipoPessoaPagador,
-            NumeroCpfCnpjPagador = dto.NumeroCpfCnpjPagador,
-            NomeRazaoSocialPagador = dto.NomeRazaoSocialPagador,
-            NomeFantasiaPagador = dto.NomeFantasiaPagador,
-            DescricaoLogradouroPagador = dto.DescricaoLogradouroPagador,
-            DescricaoCidadePagador = dto.DescricaoCidadePagador,
-            SiglaUfPagador = dto.SiglaUfPagador,
-            NumeroCepPagador = dto.NumeroCepPagador,
-            TipoPessoaAvalista = dto.TipoPessoaAvalista,
-            NumeroCpfCnpjAvalista = dto.NumeroCpfCnpjAvalista,
-            NomeAvalista = dto.NomeAvalista,
-            ValorBoleto = dto.ValorBoleto,
-            DataVencimentoBoleto = dto.DataVencimentoBoleto,
-            CodigoTipoSituacaoBoleto = dto.CodigoTipoSituacaoBoleto,
-            DescricaoSituacaoBoleto = dto.DescricaoSituacaoBoleto,
-            NumeroIdentificadorBoletoCip = dto.NumeroIdentificadorBoletoCip,
-            NumeroCodigoBarras = dto.NumeroCodigoBarras,
-            NumeroCpfCnpjPagadorEletronico = dto.NumeroCpfCnpjPagadorEletronico,
-            Aceite = dto.Aceite,
-            NumeroNossoNumero = dto.NumeroNossoNumero,
-            NumeroDocumento = dto.NumeroDocumento,
-            DataPagamento = dto.DataPagamento,
-            ValorPagamento = dto.ValorPagamento,
-            CodigoEspecieDocumento = dto.CodigoEspecieDocumento,
-            DataEmissao = dto.DataEmissao,
-            DataLimitePagamento = dto.DataLimitePagamento,
-            CodigoTipoJuros = dto.CodigoTipoJuros,
-            DataJuros = dto.DataJuros,
-            ValorPercentualJuros = dto.ValorPercentualJuros,
-            CodigoTipoMulta = dto.CodigoTipoMulta,
-            DataMulta = dto.DataMulta,
-            ValorPercentualMulta = dto.ValorPercentualMulta,
-            ValorAbatimento = dto.ValorAbatimento,
-            CodigoTipoDesconto1 = dto.CodigoTipoDesconto1,
-            DataDesconto1 = dto.DataDesconto1,
-            ValorPercentualDesconto1 = dto.ValorPercentualDesconto1,
-            CodigoTipoDesconto2 = dto.CodigoTipoDesconto2,
-            DataDesconto2 = dto.DataDesconto2,
-            ValorPercentualDesconto2 = dto.ValorPercentualDesconto2,
-            CodigoTipoDesconto3 = dto.CodigoTipoDesconto3,
-            DataDesconto3 = dto.DataDesconto3,
-            ValorPercentualDesconto3 = dto.ValorPercentualDesconto3,
-            NumeroDiasProtesto = dto.NumeroDiasProtesto,
-            QuantidadePagamentoParcial = dto.QuantidadePagamentoParcial,
-            CodigoAutorizacaoValorDivergente = dto.CodigoAutorizacaoValorDivergente,
-            CodigoIndicadorValorMaximo = dto.CodigoIndicadorValorMaximo,
-            ValorPercentualMaximo = dto.ValorPercentualMaximo,
-            CodigoIndicadorValorMinimo = dto.CodigoIndicadorValorMinimo,
-            ValorPercentualMinimo = dto.ValorPercentualMinimo,
+            MovimentoItem = new MovimentoItemDDA
+            {
+                DescricaoTipoPagador = dto.DescricaoTipoPagador,
+                TipoPessoaBeneficiario = dto.TipoPessoaBeneficiario,
+                NumeroCpfCnpjBeneficiario = dto.NumeroCpfCnpjBeneficiario,
+                NomeRazaoSocialBeneficiario = dto.NomeRazaoSocialBeneficiario,
+                TipoPessoaPagador = dto.TipoPessoaPagador,
+                NumeroCpfCnpjPagador = dto.NumeroCpfCnpjPagador,
+                NomeRazaoSocialPagador = dto.NomeRazaoSocialPagador,
+                NomeFantasiaPagador = dto.NomeFantasiaPagador,
+                DescricaoLogradouroPagador = dto.DescricaoLogradouroPagador,
+                DescricaoCidadePagador = dto.DescricaoCidadePagador,
+                SiglaUfPagador = dto.SiglaUfPagador,
+                NumeroCepPagador = dto.NumeroCepPagador,
+                TipoPessoaAvalista = dto.TipoPessoaAvalista,
+                NumeroCpfCnpjAvalista = dto.NumeroCpfCnpjAvalista,
+                NomeAvalista = dto.NomeAvalista,
+                ValorBoleto = dto.ValorBoleto,
+                DataVencimentoBoleto = dto.DataVencimentoBoleto,
+                CodigoTipoSituacaoBoleto = dto.CodigoTipoSituacaoBoleto,
+                DescricaoSituacaoBoleto = dto.DescricaoSituacaoBoleto,
+                NumeroIdentificadorBoletoCip = dto.NumeroIdentificadorBoletoCip,
+                NumeroCodigoBarras = dto.NumeroCodigoBarras,
+                NumeroCpfCnpjPagadorEletronico = dto.NumeroCpfCnpjPagadorEletronico,
+                Aceite = dto.Aceite,
+                NumeroNossoNumero = dto.NumeroNossoNumero,
+                NumeroDocumento = dto.NumeroDocumento,
+                DataPagamento = dto.DataPagamento,
+                ValorPagamento = dto.ValorPagamento,
+                CodigoEspecieDocumento = dto.CodigoEspecieDocumento,
+                DataEmissao = dto.DataEmissao,
+                DataLimitePagamento = dto.DataLimitePagamento,
+                CodigoTipoJuros = dto.CodigoTipoJuros,
+                DataJuros = dto.DataJuros,
+                ValorPercentualJuros = dto.ValorPercentualJuros,
+                CodigoTipoMulta = dto.CodigoTipoMulta,
+                DataMulta = dto.DataMulta,
+                ValorPercentualMulta = dto.ValorPercentualMulta,
+                ValorAbatimento = dto.ValorAbatimento,
+                CodigoTipoDesconto1 = dto.CodigoTipoDesconto1,
+                DataDesconto1 = dto.DataDesconto1,
+                ValorPercentualDesconto1 = dto.ValorPercentualDesconto1,
+                CodigoTipoDesconto2 = dto.CodigoTipoDesconto2,
+                DataDesconto2 = dto.DataDesconto2,
+                ValorPercentualDesconto2 = dto.ValorPercentualDesconto2,
+                CodigoTipoDesconto3 = dto.CodigoTipoDesconto3,
+                DataDesconto3 = dto.DataDesconto3,
+                ValorPercentualDesconto3 = dto.ValorPercentualDesconto3,
+                NumeroDiasProtesto = dto.NumeroDiasProtesto,
+                QuantidadePagamentoParcial = dto.QuantidadePagamentoParcial,
+                CodigoAutorizacaoValorDivergente = dto.CodigoAutorizacaoValorDivergente,
+                CodigoIndicadorValorMaximo = dto.CodigoIndicadorValorMaximo,
+                ValorPercentualMaximo = dto.ValorPercentualMaximo,
+                CodigoIndicadorValorMinimo = dto.CodigoIndicadorValorMinimo,
+                ValorPercentualMinimo = dto.ValorPercentualMinimo,
+            },
         };
 
         #endregion

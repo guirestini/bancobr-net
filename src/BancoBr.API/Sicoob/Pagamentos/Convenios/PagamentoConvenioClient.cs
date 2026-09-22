@@ -122,7 +122,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
         /// dataPagamento e recebimentoViaCaixa. Ficam na assinatura por simetria com as demais
         /// operações da família (e porque outros bancos podem exigi-los).
         /// </summary>
-        public override async Task<Movimento> ConsultarCodigoBarrasAsync(Movimento movimento, Correntista origem, bool? recebimentoViaCaixa = null, int unidade = 0, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> ConsultarCodigoBarrasAsync(Movimento movimento, Correntista origem, bool? recebimentoViaCaixa = null, int unidade = 0, CancellationToken cancellationToken = default)
         {
             var item = ExtrairItem(movimento);
 
@@ -160,7 +160,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             return movimento;
         }
 
-        public override async Task<Movimento> PagarConvenioAsync(Movimento movimento, Correntista origem, int unidade = 0, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> PagarConvenioAsync(Movimento movimento, Correntista origem, int unidade = 0, CancellationToken cancellationToken = default)
         {
             var item = ExtrairItem(movimento);
             if (origem == null) throw new ArgumentNullException(nameof(origem));
@@ -216,7 +216,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
                 wireRequest.Transacao,
                 cancellationToken).ConfigureAwait(false);
 
-            var encontrado = pagamentos?.FirstOrDefault(p => p.Transacao == wireRequest.Transacao);
+            var encontrado = pagamentos?.FirstOrDefault(p => ((MovimentoItemPagamentoConvenioCodigoBarra)p.MovimentoItem).Transacao == wireRequest.Transacao);
             if (encontrado == null)
             {
                 throw new SicoobApiException((int)System.Net.HttpStatusCode.Conflict, new List<SicoobMensagem>
@@ -229,32 +229,34 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
                 });
             }
 
+            var encontradoItem = (MovimentoItemPagamentoConvenioCodigoBarra)encontrado.MovimentoItem;
+
             // A consulta de pagamentos não devolve o PDF do comprovante — só os dados da
             // arrecadação; o mesmo já valia antes desta migração (Comprovante = null).
-            movimento.ValorPagamento = encontrado.ValorPago;
+            movimento.ValorPagamento = encontrado.ValorPagamento;
             movimento.DataPagamento = encontrado.DataPagamento;
 
-            if (encontrado.Nsu.HasValue)
-                movimento.NumeroDocumentoNoBanco = encontrado.Nsu.Value.ToString();
+            if (encontradoItem.Nsu.HasValue)
+                movimento.NumeroDocumentoNoBanco = encontradoItem.Nsu.Value.ToString();
 
-            item.Nsu = encontrado.Nsu;
-            item.ValorDocumento = encontrado.ValorDocumento;
-            item.ValorDesconto = encontrado.ValorDesconto;
-            item.ValorJuros = encontrado.ValorJuros;
-            item.ValorMulta = encontrado.ValorMulta;
-            item.Autenticacao = encontrado.Autenticacao;
-            item.RecebimentoViaCaixa = encontrado.RecebimentoViaCaixa;
-            item.IdentificadorFgts = encontrado.IdentificadorFgts;
-            item.AnoExercicio = encontrado.AnoExercicio;
-            item.Convenio = encontrado.Convenio;
-            item.SiglaConvenio = encontrado.SiglaConvenio;
-            item.Transacao = encontrado.Transacao;
+            item.Nsu = encontradoItem.Nsu;
+            item.ValorDocumento = encontradoItem.ValorDocumento;
+            item.ValorDesconto = encontradoItem.ValorDesconto;
+            item.ValorJuros = encontradoItem.ValorJuros;
+            item.ValorMulta = encontradoItem.ValorMulta;
+            item.Autenticacao = encontradoItem.Autenticacao;
+            item.RecebimentoViaCaixa = encontradoItem.RecebimentoViaCaixa;
+            item.IdentificadorFgts = encontradoItem.IdentificadorFgts;
+            item.AnoExercicio = encontradoItem.AnoExercicio;
+            item.Convenio = encontradoItem.Convenio;
+            item.SiglaConvenio = encontradoItem.SiglaConvenio;
+            item.Transacao = encontradoItem.Transacao;
 
             movimento.SituacaoBancoBr = BancoBrSituacaoEnum.Efetivado;
             return movimento;
         }
 
-        public override async Task<IReadOnlyList<Base.Models.ArrecadacaoConsultaItem>> ConsultarPagamentosAsync(string codigoBarras, long instituicao, DateTime dataMovimento, long? transacao = null, CancellationToken cancellationToken = default)
+        public override async Task<IReadOnlyList<Movimento>> ConsultarPagamentosAsync(string codigoBarras, long instituicao, DateTime dataMovimento, long? transacao = null, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}arrecadacao/codigo-barras/{codigoBarras}/pagamentos?instituicao={instituicao}&dataMovimento={dataMovimento:yyyy-MM-dd}";
             if (transacao.HasValue)
@@ -264,10 +266,10 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
 
             var itens = await SendAsync<List<ArrecadacaoConsultaItem>>(HttpMethod.Get, url, body: null, cancellationToken)
                 .ConfigureAwait(false);
-            return itens?.Select(MapArrecadacaoConsultaItem).ToList();
+            return itens?.Select(dto => MapArrecadacaoParaMovimento(codigoBarras, dto)).ToList();
         }
 
-        public override async Task<Movimento> ConsultarComprovantePorNsuAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
+        internal override async Task<Movimento> ConsultarComprovantePorNsuAsync(Movimento movimento, Correntista origem, CancellationToken cancellationToken = default)
         {
             var item = ExtrairItem(movimento);
             if (origem == null) throw new ArgumentNullException(nameof(origem));
@@ -287,7 +289,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             return movimento;
         }
 
-        public override async Task<IReadOnlyList<Base.Models.ConciliacaoItem>> ConsultarConciliacoesAsync(long instituicao, DateTime dataMovimento, int? unidade = null, CancellationToken cancellationToken = default)
+        internal override async Task<IReadOnlyList<Base.Models.ConciliacaoItem>> ConsultarConciliacoesAsync(long instituicao, DateTime dataMovimento, int? unidade = null, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}arrecadacao/conciliacoes?dataMovimento={dataMovimento:yyyy-MM-dd}&instituicao={instituicao}";
             if (unidade.HasValue)
@@ -307,7 +309,7 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             }).ToList();
         }
 
-        public override async Task<IReadOnlyList<Base.Models.ConvenioHabilitado>> ConsultarConveniosHabilitadosAsync(long transacao, long instituicao, CancellationToken cancellationToken = default)
+        internal override async Task<IReadOnlyList<Base.Models.ConvenioHabilitado>> ConsultarConveniosHabilitadosAsync(long transacao, long instituicao, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}arrecadacao/convenios-habilitados?transacao={transacao}&instituicao={instituicao}";
             var itens = await SendAsync<List<ConvenioHabilitado>>(HttpMethod.Get, url, body: null, cancellationToken)
@@ -435,28 +437,29 @@ namespace BancoBr.API.Sicoob.Pagamentos.Convenios
             }
         }
 
-        private static Base.Models.ArrecadacaoConsultaItem MapArrecadacaoConsultaItem(ArrecadacaoConsultaItem dto) => new Base.Models.ArrecadacaoConsultaItem
+        private static Movimento MapArrecadacaoParaMovimento(string codigoBarras, ArrecadacaoConsultaItem dto) => new Movimento
         {
-            ValorPago = dto.ValorPago,
-            Nsu = dto.Nsu,
+            ValorPagamento = dto.ValorPago,
             DataPagamento = dto.DataPagamento,
-            ValorDocumento = dto.ValorDocumento,
-            ValorDesconto = dto.ValorDesconto,
-            ValorJuros = dto.ValorJuros,
-            ValorMulta = dto.ValorMulta,
-            IdentificadorFgts = dto.IdentificadorFgts,
-            AnoExercicio = dto.AnoExercicio,
-            RecebimentoViaCaixa = dto.RecebimentoViaCaixa,
-            Autenticacao = dto.Autenticacao,
-            Situacao = dto.Situacao == null ? null : new Base.Models.SituacaoArrecadacao
+            NumeroDocumentoNoBanco = dto.Nsu?.ToString(),
+            SituacaoBancoBr = MapSituacaoArrecadacaoParaSituacao(dto.Situacao),
+            DetalheRejeicaoBancoBr = dto.Situacao?.Descricao,
+            MovimentoItem = new MovimentoItemPagamentoConvenioCodigoBarra
             {
-                Codigo = dto.Situacao.Codigo,
-                Descricao = dto.Situacao.Descricao,
+                CodigoBarra = codigoBarras,
+                ValorDocumento = dto.ValorDocumento,
+                ValorDesconto = dto.ValorDesconto,
+                ValorJuros = dto.ValorJuros,
+                ValorMulta = dto.ValorMulta,
+                Nsu = dto.Nsu,
+                Transacao = dto.Transacao,
+                RecebimentoViaCaixa = dto.RecebimentoViaCaixa,
+                Autenticacao = dto.Autenticacao,
+                IdentificadorFgts = dto.IdentificadorFgts,
+                AnoExercicio = dto.AnoExercicio,
+                Convenio = dto.Convenio,
+                SiglaConvenio = dto.SiglaConvenio,
             },
-            BancoBrSituacao = MapSituacaoArrecadacaoParaSituacao(dto.Situacao),
-            Convenio = dto.Convenio,
-            SiglaConvenio = dto.SiglaConvenio,
-            Transacao = dto.Transacao,
         };
 
         #endregion

@@ -29,7 +29,7 @@ namespace BancoBr.API.Base
         /// Consulta a situação de um pagamento já iniciado. O identificador do pagamento no
         /// banco (EndToEndId) é lido de <see cref="Movimento.NumeroDocumentoNoBanco"/>.
         /// </summary>
-        public abstract Task<Movimento> ConsultarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> ConsultarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Resolve a chave DICT informada em
@@ -37,13 +37,13 @@ namespace BancoBr.API.Base
         /// movimentar valores. Espera um <see cref="MovimentoItemTransferenciaPIX"/> como
         /// <see cref="Movimento.MovimentoItem"/>.
         /// </summary>
-        public abstract Task<Movimento> IniciarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> IniciarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Efetiva um pagamento previamente iniciado por
         /// <see cref="IniciarPagamentoAsync"/>.
         /// </summary>
-        public abstract Task<Movimento> ConfirmarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> ConfirmarPagamentoAsync(Movimento movimento, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Conveniência para o caso sem aprovação humana entre iniciação e confirmação: chama
@@ -51,7 +51,7 @@ namespace BancoBr.API.Base
         /// no mesmo movimento. Quando o ERP precisa exibir o titular resolvido para confirmação
         /// antes de pagar, use os dois métodos separadamente.
         /// </summary>
-        public abstract Task<Movimento> PagarComIniciacaoAsync(Movimento movimento, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> PagarComIniciacaoAsync(Movimento movimento, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Paga um Pix Copia e Cola (QR Code estático ou com vencimento) com execução
@@ -60,6 +60,6 @@ namespace BancoBr.API.Base
         /// Espera um <see cref="MovimentoItemPagamentoTituloPIXQRCode"/> como
         /// <see cref="Movimento.MovimentoItem"/>.
         /// </summary>
-        public abstract Task<Movimento> PagarViaQrCodeAsync(Correntista origem, Movimento movimento, CancellationToken cancellationToken = default);
+        internal abstract Task<Movimento> PagarViaQrCodeAsync(Correntista origem, Movimento movimento, CancellationToken cancellationToken = default);
     }
 }

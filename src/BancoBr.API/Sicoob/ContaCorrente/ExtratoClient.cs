@@ -99,7 +99,7 @@ namespace BancoBr.API.Sicoob.ContaCorrente
 
         #region ::. Operações .::
 
-        public override async Task<Extrato> ConsultarExtratoAsync(long numeroContaCorrente, int mes, int ano, int? diaInicial, int? diaFinal, bool agruparCnab, CancellationToken cancellationToken = default)
+        internal override async Task<IReadOnlyList<Movimento>> ConsultarExtratoAsync(long numeroContaCorrente, int mes, int ano, int? diaInicial, int? diaFinal, bool agruparCnab, CancellationToken cancellationToken = default)
         {
             var url = $"{_baseUrl}extrato/{mes}/{ano}?numeroContaCorrente={numeroContaCorrente}&agruparCNAB={(agruparCnab ? "true" : "false")}";
 
@@ -112,7 +112,7 @@ namespace BancoBr.API.Sicoob.ContaCorrente
             using (var response = await SendWithAuthAsync(() => BuildRequest(url), cancellationToken).ConfigureAwait(false))
             {
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
-                    return new Extrato { Transacoes = Array.Empty<ExtratoTransacao>() };
+                    return Array.Empty<Movimento>();
 
                 await EnsureSuccessOrThrowAsync(response).ConfigureAwait(false);
 
@@ -127,34 +127,47 @@ namespace BancoBr.API.Sicoob.ContaCorrente
 
         #region ::. Mapeamento wire -> agnóstico .::
 
-        private static Extrato MapExtrato(ExtratoResponse wire)
+        private static IReadOnlyList<Movimento> MapExtrato(ExtratoResponse wire)
         {
             if (wire == null)
-                return new Extrato { Transacoes = Array.Empty<ExtratoTransacao>() };
+                return Array.Empty<Movimento>();
 
-            return new Extrato
+            var resultado = new List<Movimento>
             {
-                SaldoAtual = ParseDecimal(wire.SaldoAtual),
-                SaldoBloqueado = ParseDecimal(wire.SaldoBloqueado),
-                SaldoLimite = ParseDecimal(wire.SaldoLimite),
-                SaldoAnterior = ParseDecimal(wire.SaldoAnterior),
-                SaldoBloqueioJudicial = ParseDecimal(wire.SaldoBloqueioJudicial),
-                SaldoBloqueioJudicialAnterior = ParseDecimal(wire.SaldoBloqueioJudicialAnterior),
-                Transacoes = (wire.Transacoes ?? Array.Empty<TransacaoResponse>()).Select(MapTransacao).ToList(),
+                new Movimento
+                {
+                    MovimentoItem = new MovimentoItemExtratoSaldo
+                    {
+                        SaldoAtual = ParseDecimal(wire.SaldoAtual),
+                        SaldoBloqueado = ParseDecimal(wire.SaldoBloqueado),
+                        SaldoLimite = ParseDecimal(wire.SaldoLimite),
+                        SaldoAnterior = ParseDecimal(wire.SaldoAnterior),
+                        SaldoBloqueioJudicial = ParseDecimal(wire.SaldoBloqueioJudicial),
+                        SaldoBloqueioJudicialAnterior = ParseDecimal(wire.SaldoBloqueioJudicialAnterior),
+                    },
+                },
             };
+
+            if (wire.Transacoes != null)
+                resultado.AddRange(wire.Transacoes.Select(MapTransacao));
+
+            return resultado;
         }
 
-        private static ExtratoTransacao MapTransacao(TransacaoResponse dto) => new ExtratoTransacao
+        private static Movimento MapTransacao(TransacaoResponse dto) => new Movimento
         {
-            TransactionId = dto.TransactionId,
-            Tipo = MapTipo(dto.Tipo),
-            Valor = ParseDecimal(dto.Valor),
-            Data = ParseData(dto.Data),
-            DataLote = string.IsNullOrWhiteSpace(dto.DataLote) ? (DateTime?)null : ParseData(dto.DataLote),
-            Descricao = dto.Descricao,
-            NumeroDocumento = dto.NumeroDocumento,
-            CpfCnpj = dto.CpfCnpj,
-            DescricaoInformacaoComplementar = dto.DescInfComplementar,
+            MovimentoItem = new MovimentoItemExtratoTransacao
+            {
+                TransactionId = dto.TransactionId,
+                Tipo = MapTipo(dto.Tipo),
+                Valor = ParseDecimal(dto.Valor),
+                Data = ParseData(dto.Data),
+                DataLote = string.IsNullOrWhiteSpace(dto.DataLote) ? (DateTime?)null : ParseData(dto.DataLote),
+                Descricao = dto.Descricao,
+                NumeroDocumento = dto.NumeroDocumento,
+                CpfCnpj = dto.CpfCnpj,
+                DescricaoInformacaoComplementar = dto.DescInfComplementar,
+            },
         };
 
         /// <summary>
