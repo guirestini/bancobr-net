@@ -12,5 +12,8 @@ namespace BancoBr.Common.Enums
         Efetivado = 2,
         Cancelado = 3,
         Rejeitado = 4,
+
+        /// <summary>Boleto de cobrança registrado no banco (emissão concluída), aguardando pagamento do pagador.</summary>
+        Registrado = 5,
     }
 }

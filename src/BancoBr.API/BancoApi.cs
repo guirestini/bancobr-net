@@ -14,6 +14,7 @@ using BancoBr.API.Sicoob.Pagamentos.Pix;
 using BancoBr.API.Sicoob.Pagamentos.Ted;
 using BancoBr.Common.Enums;
 using BancoBr.Common.Instances;
+using SantanderCobrancaBoletoClient = BancoBr.API.Santander.Cobranca.Boletos.CobrancaBoletoClient;
 using SantanderPagamentoPixClient = BancoBr.API.Santander.Pagamentos.Pix.PagamentoPixClient;
 
 namespace BancoBr.API
@@ -31,7 +32,8 @@ namespace BancoBr.API
     /// — eles despacham com base no tipo concreto de <see cref="Movimento.MovimentoItem"/>. Todo
     /// retorno da BancoBr.API é <see cref="Movimento"/> — inclusive consultas de lista que não
     /// partem de um único Movimento de entrada (DDA, extrato, pagamentos de convênio já
-    /// realizados), que têm seu próprio método público abaixo e devolvem cada item com um
+    /// realizados), que têm seu próprio método público abaixo (assim como a emissão de boleto
+    /// de cobrança, <see cref="EmitirBoletoAsync"/>) e devolvem cada item com um
     /// <see cref="MovimentoItem"/> específico da operação (<see cref="MovimentoItemDDA"/>,
     /// <see cref="MovimentoItemExtratoTransacao"/>, <see cref="MovimentoItemPagamentoConvenioCodigoBarra"/>).
     /// </summary>
@@ -55,10 +57,17 @@ namespace BancoBr.API
                         new PagamentoConvenioClient(clientId, clientSecret, certificateSource, tokenEndpointOverride),
                         new PagamentoPixClient(clientId, clientSecret, certificateSource, tokenEndpointOverride),
                         new TedClient(clientId, clientSecret, certificateSource, tokenEndpointOverride),
-                        new ExtratoClient(clientId, clientSecret, certificateSource, tokenEndpointOverride));
+                        new ExtratoClient(clientId, clientSecret, certificateSource, tokenEndpointOverride),
+                        null);
 
                 case BancoEnum.Santander:
-                    return new BancoApi(null, null, new SantanderPagamentoPixClient(clientId, clientSecret, certificateSource, tokenEndpointOverride), null, null);
+                    return new BancoApi(
+                        null,
+                        null,
+                        new SantanderPagamentoPixClient(clientId, clientSecret, certificateSource, tokenEndpointOverride),
+                        null,
+                        null,
+                        new SantanderCobrancaBoletoClient(clientId, clientSecret, certificateSource, tokenEndpointOverride));
 
                 default:
                     throw new Exception($"Banco não implementado: {banco}!");
@@ -79,10 +88,17 @@ namespace BancoBr.API
                         new PagamentoConvenioClient(clientId, certificateSource, tokenProvider),
                         new PagamentoPixClient(clientId, certificateSource, tokenProvider),
                         new TedClient(clientId, certificateSource, tokenProvider),
-                        new ExtratoClient(clientId, certificateSource, tokenProvider));
+                        new ExtratoClient(clientId, certificateSource, tokenProvider),
+                        null);
 
                 case BancoEnum.Santander:
-                    return new BancoApi(null, null, new SantanderPagamentoPixClient(clientId, certificateSource, tokenProvider), null, null);
+                    return new BancoApi(
+                        null,
+                        null,
+                        new SantanderPagamentoPixClient(clientId, certificateSource, tokenProvider),
+                        null,
+                        null,
+                        new SantanderCobrancaBoletoClient(clientId, certificateSource, tokenProvider));
 
                 default:
                     throw new Exception($"Banco não implementado: {banco}!");
@@ -94,9 +110,10 @@ namespace BancoBr.API
         private readonly PagamentoPixApiBase _pix;
         private readonly PagamentoTedApiBase _ted;
         private readonly ContaCorrenteApiBase _contaCorrente;
+        private readonly CobrancaBoletoApiBase _cobranca;
 
-        private BancoApi(PagamentoBoletoApiBase boleto, PagamentoConvenioApiBase convenio, PagamentoPixApiBase pix, PagamentoTedApiBase ted, ContaCorrenteApiBase contaCorrente) =>
-            (_boleto, _convenio, _pix, _ted, _contaCorrente) = (boleto, convenio, pix, ted, contaCorrente);
+        private BancoApi(PagamentoBoletoApiBase boleto, PagamentoConvenioApiBase convenio, PagamentoPixApiBase pix, PagamentoTedApiBase ted, ContaCorrenteApiBase contaCorrente, CobrancaBoletoApiBase cobranca) =>
+            (_boleto, _convenio, _pix, _ted, _contaCorrente, _cobranca) = (boleto, convenio, pix, ted, contaCorrente, cobranca);
 
         /// <summary>
         /// Envia o movimento — consulta prévia (quando o banco exige) + pagamento, na mesma
@@ -205,6 +222,31 @@ namespace BancoBr.API
                     throw new NotSupportedException($"Cancelamento não é suportado para {movimento?.MovimentoItem?.GetType().Name ?? "null"} — a API do Sicoob não expõe esse endpoint para Pix/Convênio.");
             }
         }
+
+        /// <summary>
+        /// Emite (registra) um boleto de cobrança. <see cref="Movimento.MovimentoItem"/> deve ser um
+        /// <see cref="MovimentoItemBoletoCobranca"/>; <see cref="Movimento.Favorecido"/> é o pagador e
+        /// <paramref name="beneficiario"/> é quem recebe — seu <see cref="Correntista.Convenio"/> é o
+        /// convênio de cobrança. O código de barras, a linha digitável e o QR Code Pix voltam no item.
+        /// </summary>
+        public Task<Movimento> EmitirBoletoAsync(Movimento movimento, Correntista beneficiario, CancellationToken cancellationToken = default)
+        {
+            if (!(ExtrairItem(movimento) is MovimentoItemBoletoCobranca))
+                throw OperacaoNaoSuportada("emissão", movimento);
+
+            return Requer(_cobranca).EmitirBoletoAsync(movimento, beneficiario, cancellationToken);
+        }
+
+        /// <summary>
+        /// Consulta única de retorno de cobrança: cada boleto volta como um <see cref="Movimento"/> com um
+        /// <see cref="MovimentoItemRetornoCobranca"/>, no mesmo formato qualquer que seja o
+        /// <paramref name="tipo"/> (hoje só <see cref="TipoRetornoCobrancaEnum.Liquidacao"/>: boletos pagos
+        /// no período). <paramref name="tipoData"/> escolhe se o período filtra a data de pagamento ou de
+        /// vencimento; <paramref name="nossoNumero"/> e <paramref name="seuNumero"/> são filtros opcionais.
+        /// Todas as páginas do banco são lidas. O convênio vem de <paramref name="beneficiario"/>.
+        /// </summary>
+        public Task<IReadOnlyList<Movimento>> ConsultarRetornoCobrancaAsync(Correntista beneficiario, TipoRetornoCobrancaEnum tipo, DateTime dataInicial, DateTime dataFinal, TipoDataRetornoCobrancaEnum tipoData = TipoDataRetornoCobrancaEnum.Pagamento, string nossoNumero = null, string seuNumero = null, CancellationToken cancellationToken = default)
+            => Requer(_cobranca).ConsultarRetornoAsync(beneficiario, tipo, dataInicial, dataFinal, tipoData, nossoNumero, seuNumero, cancellationToken);
 
         /// <summary>Consulta de lista: boletos DDA com vencimento/pagamento num intervalo — cada item vem como um <see cref="Movimento"/> com <see cref="MovimentoItemDDA"/>.</summary>
         public Task<IReadOnlyList<Movimento>> ConsultarDDAAsync(long numeroConta, DateTime dataInicial, DateTime dataFinal, SituacaoBoletoEnum situacao, TipoDataConsultaEnum tipoData, CancellationToken cancellationToken = default)

@@ -2,19 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using BancoBr.API.Base;
-using BancoBr.API.Core.Errors;
 using BancoBr.API.Core.OAuth;
 using BancoBr.API.Core.Http;
-using BancoBr.API.Santander.Errors;
+using BancoBr.API.Santander.Http;
 using BancoBr.API.Santander.Pagamentos.Pix.Models;
 using BancoBr.Common.Core;
 using BancoBr.Common.Enums;
 using BancoBr.Common.Instances;
-using Newtonsoft.Json;
 
 namespace BancoBr.API.Santander.Pagamentos.Pix
 {
@@ -39,22 +36,18 @@ namespace BancoBr.API.Santander.Pagamentos.Pix
     {
         public static readonly Uri BaseUrl = new Uri("https://trust-open.api.santander.com.br/management_payments_partners/v1");
 
-        private static readonly Uri DefaultTokenEndpoint = new Uri("https://trust-open.api.santander.com.br/auth/oauth/v2/token");
-
-        private readonly IAccessTokenProvider _tokenProvider;
-        private readonly string _clientId;
+        private readonly SantanderHttpGateway _gateway;
         private readonly string _baseUrl;
         private readonly Dictionary<string, (string WorkspaceId, ContaDebito Conta)> _workspaces = new Dictionary<string, (string WorkspaceId, ContaDebito Conta)>();
         private readonly SemaphoreSlim _workspacesLock = new SemaphoreSlim(1, 1);
-        private static readonly JsonSerializerSettings SerializerSettings = new JsonSerializerSettings();
 
         internal PagamentoPixClient(string clientId, string clientSecret, CertificateSource certificateSource, Uri tokenEndpoint = null)
-            : this(clientId, certificateSource, BuildTokenProvider(clientId, clientSecret, certificateSource, tokenEndpoint ?? DefaultTokenEndpoint))
+            : this(clientId, certificateSource, SantanderHttpGateway.BuildTokenProvider(clientId, clientSecret, certificateSource, tokenEndpoint))
         {
         }
 
         internal PagamentoPixClient(string clientId, CertificateSource certificateSource, IAccessTokenProvider tokenProvider)
-            : this(BuildHttpClient(certificateSource), tokenProvider, clientId, BaseUrl)
+            : this(SantanderHttpGateway.BuildHttpClient(certificateSource), tokenProvider, clientId, BaseUrl)
         {
         }
 
@@ -66,33 +59,9 @@ namespace BancoBr.API.Santander.Pagamentos.Pix
         {
             if (baseUrl == null) throw new ArgumentNullException(nameof(baseUrl));
 
-            _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
-            _clientId = clientId ?? throw new ArgumentNullException(nameof(clientId));
+            _gateway = new SantanderHttpGateway(httpClient, tokenProvider, clientId);
             var baseUrlText = baseUrl.ToString();
             _baseUrl = baseUrlText.EndsWith("/") ? baseUrlText : baseUrlText + "/";
-        }
-
-        private static HttpClient BuildHttpClient(CertificateSource certificateSource)
-        {
-            var certHandler = new HttpClientHandler
-            {
-                ClientCertificateOptions = ClientCertificateOption.Manual,
-            };
-            certHandler.ClientCertificates.Add(certificateSource.GetCertificate());
-
-            return new HttpClient(certHandler);
-        }
-
-        private static OAuthTokenProvider BuildTokenProvider(string clientId, string clientSecret, CertificateSource certificateSource, Uri tokenEndpoint)
-        {
-            var tokenOptions = new OAuthTokenProviderOptions
-            {
-                TokenEndpoint = tokenEndpoint,
-                ClientId = clientId,
-                ClientSecret = clientSecret,
-            };
-
-            return new OAuthTokenProvider(BuildHttpClient(certificateSource), tokenOptions);
         }
 
         #region ::. Operações .::
@@ -106,7 +75,7 @@ namespace BancoBr.API.Santander.Pagamentos.Pix
 
             var workspace = await ResolverWorkspaceAsync(origem, cancellationToken).ConfigureAwait(false);
             var url = $"{_baseUrl}workspaces/{workspace.WorkspaceId}/pix_payments/{movimento.NumeroDocumentoNoBanco}";
-            var dto = await SendAsync<PagamentoPixResponse>(HttpMethod.Get, url, body: null, cancellationToken).ConfigureAwait(false);
+            var dto = await _gateway.SendAsync<PagamentoPixResponse>(HttpMethod.Get, url, body: null, cancellationToken).ConfigureAwait(false);
 
             return AplicarResposta(movimento, dto);
         }
@@ -151,9 +120,9 @@ namespace BancoBr.API.Santander.Pagamentos.Pix
 
             // A conta é enviada explicitamente: se a workspace foi achada por uma conta adicional,
             // sem isso o banco debitaria a conta principal.
-            var json = JsonConvert.SerializeObject(new RequisicaoConfirmacaoPix { PaymentValue = movimento.ValorPagamento, DebitAccount = workspace.Conta }, SerializerSettings);
+            var confirmacao = new RequisicaoConfirmacaoPix { PaymentValue = movimento.ValorPagamento, DebitAccount = workspace.Conta };
 
-            var dto = await SendAsync<PagamentoPixResponse>(new HttpMethod("PATCH"), url, json, cancellationToken).ConfigureAwait(false);
+            var dto = await _gateway.SendAsync<PagamentoPixResponse>(new HttpMethod("PATCH"), url, confirmacao, cancellationToken).ConfigureAwait(false);
 
             return AplicarResposta(movimento, dto);
         }
@@ -198,9 +167,8 @@ namespace BancoBr.API.Santander.Pagamentos.Pix
         {
             var workspace = await ResolverWorkspaceAsync(origem, cancellationToken).ConfigureAwait(false);
             var url = $"{_baseUrl}workspaces/{workspace.WorkspaceId}/pix_payments";
-            var json = JsonConvert.SerializeObject(wireRequest, SerializerSettings);
 
-            var dto = await SendAsync<PagamentoPixResponse>(HttpMethod.Post, url, json, cancellationToken).ConfigureAwait(false);
+            var dto = await _gateway.SendAsync<PagamentoPixResponse>(HttpMethod.Post, url, wireRequest, cancellationToken).ConfigureAwait(false);
 
             return AplicarResposta(movimento, dto);
         }
@@ -242,7 +210,7 @@ namespace BancoBr.API.Santander.Pagamentos.Pix
                 if (workspace == null)
                 {
                     var nova = new Workspace { Type = "PAYMENTS", Description = "BancoBr Pix", MainDebitAccount = alvo, PixPaymentsActive = true };
-                    var criada = await SendAsync<Workspace>(HttpMethod.Post, $"{_baseUrl}workspaces", JsonConvert.SerializeObject(nova, SerializerSettings), cancellationToken).ConfigureAwait(false);
+                    var criada = await _gateway.SendAsync<Workspace>(HttpMethod.Post, $"{_baseUrl}workspaces", nova, cancellationToken).ConfigureAwait(false);
                     resolvida = (criada.IdResolvido, alvo);
                 }
                 else
@@ -257,7 +225,7 @@ namespace BancoBr.API.Santander.Pagamentos.Pix
                         workspace.AdditionalDebitAccounts = workspace.AdditionalDebitAccounts ?? workspace.AddicionalDebitAccounts;
                         workspace.AddicionalDebitAccounts = null;
                         workspace.PixPaymentsActive = true;
-                        await SendAsync<Workspace>(new HttpMethod("PATCH"), $"{_baseUrl}workspaces/{id}", JsonConvert.SerializeObject(workspace, SerializerSettings), cancellationToken).ConfigureAwait(false);
+                        await _gateway.SendAsync<Workspace>(new HttpMethod("PATCH"), $"{_baseUrl}workspaces/{id}", workspace, cancellationToken).ConfigureAwait(false);
                     }
 
                     resolvida = (id, conta);
@@ -279,7 +247,7 @@ namespace BancoBr.API.Santander.Pagamentos.Pix
 
             while (true)
             {
-                var dto = await SendAsync<WorkspaceListResponse>(HttpMethod.Get, $"{_baseUrl}workspaces?_limit={limite}&_offset={todas.Count}", body: null, cancellationToken).ConfigureAwait(false);
+                var dto = await _gateway.SendAsync<WorkspaceListResponse>(HttpMethod.Get, $"{_baseUrl}workspaces?_limit={limite}&_offset={todas.Count}", body: null, cancellationToken).ConfigureAwait(false);
                 if (dto?.Content == null || dto.Content.Count == 0)
                     break;
 
@@ -444,110 +412,6 @@ namespace BancoBr.API.Santander.Pagamentos.Pix
                 default:
                     return BancoBrSituacaoEnum.NaoIntegrado;
             }
-        }
-
-        #endregion
-
-        #region ::. Plumbing HTTP .::
-
-        private async Task<T> SendAsync<T>(HttpMethod method, string url, string body, CancellationToken cancellationToken)
-        {
-            using (var response = await SendWithAuthAsync(() => BuildRequest(method, url, body), cancellationToken).ConfigureAwait(false))
-            {
-                if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
-                {
-                    return default;
-                }
-
-                var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-                EnsureSuccessOrThrow(response, responseBody);
-
-                return JsonConvert.DeserializeObject<T>(responseBody, SerializerSettings);
-            }
-        }
-
-        private HttpRequestMessage BuildRequest(HttpMethod method, string url, string body)
-        {
-            var request = new HttpRequestMessage(method, url);
-            request.Headers.Add("X-Application-Key", _clientId);
-
-            if (body != null)
-            {
-                request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-            }
-
-            return request;
-        }
-
-        private async Task<HttpResponseMessage> SendWithAuthAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
-        {
-            var token = await _tokenProvider.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
-            var response = await SendOnceAsync(requestFactory, token, cancellationToken).ConfigureAwait(false);
-
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                response.Dispose();
-                _tokenProvider.InvalidateToken();
-                token = await _tokenProvider.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
-                response = await SendOnceAsync(requestFactory, token, cancellationToken).ConfigureAwait(false);
-            }
-
-            return response;
-        }
-
-        private async Task<HttpResponseMessage> SendOnceAsync(Func<HttpRequestMessage> requestFactory, string token, CancellationToken cancellationToken)
-        {
-            using (var request = requestFactory())
-            {
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                return await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            }
-        }
-
-        /// <summary>
-        /// Todos os status de erro do Hub de Pagamentos seguem o mesmo corpo
-        /// (_errorCode/_message/_details/_errors[]). Se o corpo não vier nesse formato, cai para
-        /// o texto bruto da resposta, para nunca esconder a causa real de uma falha.
-        /// </summary>
-        private static void EnsureSuccessOrThrow(HttpResponseMessage response, string body)
-        {
-            if (response.IsSuccessStatusCode)
-            {
-                return;
-            }
-
-            var mensagens = new List<MensagemErro>();
-
-            SantanderErrorResponse erro;
-            try
-            {
-                erro = JsonConvert.DeserializeObject<SantanderErrorResponse>(body, SerializerSettings);
-            }
-            catch (JsonException)
-            {
-                erro = null;
-            }
-
-            if (erro != null && (!string.IsNullOrEmpty(erro.Message) || !string.IsNullOrEmpty(erro.Details)))
-            {
-                mensagens.Add(new MensagemErro { Codigo = erro.ErrorCode, Mensagem = string.IsNullOrEmpty(erro.Details) ? erro.Message : erro.Details });
-            }
-
-            if (erro?.Errors != null)
-            {
-                foreach (var item in erro.Errors)
-                {
-                    mensagens.Add(new MensagemErro { Codigo = item.Code, Mensagem = string.IsNullOrEmpty(item.Field) ? item.Message : $"{item.Field}: {item.Message}" });
-                }
-            }
-
-            if (mensagens.Count == 0 && !string.IsNullOrWhiteSpace(body))
-            {
-                mensagens.Add(new MensagemErro { Codigo = ((int)response.StatusCode).ToString(), Mensagem = body });
-            }
-
-            throw new BancoApiException((int)response.StatusCode, mensagens);
         }
 
         #endregion

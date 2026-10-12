@@ -12,7 +12,7 @@ Biblioteca para integração bancária para pagamentos de contas, transferência
 - [x] Leitura de retorno padrão CNAB 240
 - [ ] Integração via API
   - [x] Sicoob
-  - [ ] Santander (Pix por chave DICT e QR Code; demais operações pendentes)
+  - [ ] Santander (Pix por chave DICT e QR Code, emissão de boletos de cobrança e retorno de liquidações; demais operações pendentes)
   - [ ] Demais instituições
 
 ## Segmentos
@@ -211,9 +211,10 @@ var banco = BancoApi.Conectar(BancoEnum.Sicoob, clientId: "seu-client-id", clien
 // Alternativa: token já emitido (ex.: portal de sandbox do Sicoob), pulando o fluxo OAuth2.
 // var banco = BancoApi.Conectar(BancoEnum.Sicoob, clientId: "seu-client-id", certificateSource, new StaticAccessTokenProvider("token-bearer"));
 
-// Santander (por enquanto só Pix): mesmo fluxo, com certificado mTLS + OAuth2. As chamadas do Hub de Pagamentos
-// acontecem dentro de uma "workspace", que o BancoBr resolve sozinho pela conta pagadora (origem): usa a workspace
-// ativa que contém a conta, habilita o Pix nela se estiver desligado e cria uma se não existir.
+// Santander (Pix e emissão de boletos de cobrança): mesmo fluxo, com certificado mTLS + OAuth2. As chamadas do Hub de
+// Pagamentos acontecem dentro de uma "workspace", que o BancoBr resolve sozinho pela conta pagadora (origem): usa a
+// workspace ativa que contém a conta, habilita o Pix nela se estiver desligado e cria uma se não existir. No Hub de
+// Cobrança a workspace é resolvida pelo convênio do beneficiário (Correntista.Convenio) e precisa já existir.
 // var banco = BancoApi.Conectar(BancoEnum.Santander, clientId: "seu-client-id", clientSecret: "seu-client-secret", certificateSource);
 ```
 
@@ -297,6 +298,63 @@ var movimentoTed = new Movimento
 await banco.EnviarAgendamentoAsync(movimentoTed, origem);
 await banco.ConsultarAgendamentoAsync(movimentoTed, origem); // situação/comprovante
 // await banco.CancelarAgendamentoAsync(movimentoTed, origem); // enquanto agendada
+```
+
+###### Emitindo um boleto de cobrança (Santander)
+
+```csharp
+// O beneficiário é quem emite e recebe; o Convenio é o código do convênio de cobrança no Hub do Santander.
+var beneficiario = new Correntista { Convenio = "1234567" };
+
+var boleto = new Movimento
+{
+    ValorPagamento = 10.15m,        // valor nominal
+    NumeroDocumento = "NF10",       // "seu número" (até 15 caracteres)
+    Favorecido = new Favorecido     // o pagador (quem será cobrado)
+    {
+        Nome = "João da Silva",
+        CPF_CNPJ = "961.586.583-20",
+        Endereco = "Rua XV de Maio",
+        NumeroEndereco = "100",
+        Bairro = "Vila Industrial",
+        Cidade = "São Paulo",
+        UF = "SP",
+        CEP = 9761233
+    },
+    MovimentoItem = new MovimentoItemBoletoCobranca
+    {
+        NossoNumero = "123",
+        DataVencimento = DateTime.Today.AddDays(15),
+        PercentualMulta = 2m,
+        DiasMulta = 1,
+        PercentualJuros = 1m,
+        // AmbienteTeste = true, // emite no ambiente de testes do banco
+    }
+};
+
+await banco.EmitirBoletoAsync(boleto, beneficiario);
+
+var item = (MovimentoItemBoletoCobranca)boleto.MovimentoItem;
+Console.WriteLine($"Situação={boleto.SituacaoBancoBr}, Linha digitável={item.LinhaDigitavel}, Pix={item.QrCodePix}");
+```
+
+###### Retorno de cobrança (boletos liquidados — Santander)
+
+```csharp
+// Consulta única de retorno: todo boleto volta como Movimento + MovimentoItemRetornoCobranca, qualquer que seja o
+// tipo de retorno (hoje só Liquidacao). Todas as páginas do banco são lidas.
+var liquidados = await banco.ConsultarRetornoCobrancaAsync(
+    beneficiario,
+    TipoRetornoCobrancaEnum.Liquidacao,
+    dataInicial: DateTime.Today.AddDays(-7),
+    dataFinal: DateTime.Today,
+    tipoData: TipoDataRetornoCobrancaEnum.Pagamento); // ou Vencimento
+
+foreach (var movimento in liquidados)
+{
+    var retorno = (MovimentoItemRetornoCobranca)movimento.MovimentoItem;
+    Console.WriteLine($"Nosso número {movimento.NumeroDocumentoNoBanco}: pago {movimento.ValorPagamento:C} em {movimento.DataPagamento:d} via {retorno.TipoPagamento}");
+}
 ```
 
 ###### Consultando o DDA (boletos a pagar)

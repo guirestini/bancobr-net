@@ -384,6 +384,227 @@ namespace BancoBr.Common.Instances
         #endregion
     }
 
+    /// <summary>
+    /// Emissão (registro) de um boleto de cobrança, só via API bancária (Santander).
+    /// No <see cref="Movimento"/>: <see cref="Movimento.Favorecido"/> é o <b>pagador</b> (quem
+    /// será cobrado), <see cref="Movimento.ValorPagamento"/> é o valor nominal e
+    /// <see cref="Movimento.NumeroDocumento"/> é o "seu número" (até 15 caracteres
+    /// alfanuméricos). O beneficiário (quem recebe) é o <see cref="Correntista"/> passado a
+    /// <c>BancoApi.EmitirBoletoAsync</c>, cujo <see cref="Correntista.Convenio"/> é o código do
+    /// convênio de cobrança. Após a emissão, <see cref="Movimento.NumeroDocumentoNoBanco"/>
+    /// traz o nosso número e <see cref="Movimento.SituacaoBancoBr"/> fica
+    /// <see cref="BancoBrSituacaoEnum.Registrado"/>.
+    /// </summary>
+    public class MovimentoItemBoletoCobranca : MovimentoItem
+    {
+        #region ::. Dados do boleto .::
+
+        /// <summary>Nosso número (1 a 13 dígitos).</summary>
+        public string NossoNumero { get; set; }
+
+        public DateTime DataVencimento { get; set; }
+
+        /// <summary>Data de emissão; quando não informada, usa a data de hoje.</summary>
+        public DateTime? DataEmissao { get; set; }
+
+        /// <summary>Controle do participante (até 25 caracteres alfanuméricos).</summary>
+        public string CodigoParticipante { get; set; }
+
+        public EspecieDocumentoBoletoEnum EspecieDocumento { get; set; }
+
+        /// <summary>Beneficiário final, quando diferente do beneficiário do convênio.</summary>
+        public Pessoa BeneficiarioFinal { get; set; }
+
+        /// <summary>Mensagens impressas no boleto.</summary>
+        public List<string> Mensagens { get; set; }
+
+        #endregion
+
+        #region ::. Desconto, multa, juros e abatimento .::
+
+        public TipoDescontoBoletoEnum TipoDesconto { get; set; }
+
+        /// <summary>Até três descontos, por ordem de data limite; ignorados com <see cref="TipoDescontoBoletoEnum.Isento"/>.</summary>
+        public List<DescontoBoleto> Descontos { get; set; }
+
+        public decimal? PercentualMulta { get; set; }
+
+        public int? DiasMulta { get; set; }
+
+        public decimal? PercentualJuros { get; set; }
+
+        public decimal? ValorAbatimento { get; set; }
+
+        public decimal? PercentualIOF { get; set; }
+
+        #endregion
+
+        #region ::. Protesto e baixa .::
+
+        public TipoProtestoBoletoEnum TipoProtesto { get; set; }
+
+        public int? DiasProtesto { get; set; }
+
+        public int? DiasBaixa { get; set; }
+
+        #endregion
+
+        #region ::. Pagamento divergente/parcial .::
+
+        public TipoPagamentoBoletoEnum TipoPagamento { get; set; }
+
+        public int? QuantidadeParciais { get; set; }
+
+        public TipoValorPagamentoParcialEnum? TipoValorParcial { get; set; }
+
+        public decimal? ValorMinimo { get; set; }
+
+        public decimal? ValorMaximo { get; set; }
+
+        #endregion
+
+        #region ::. Partilha e Pix (Bolepix) .::
+
+        public List<PartilhaBoleto> Partilha { get; set; }
+
+        /// <summary>Tipo da chave DICT que recebe o Pix do boleto (Bolepix); junto com <see cref="ChavePIX"/>.</summary>
+        public FormaIniciacaoEnum TipoChavePIX { get; set; }
+
+        public string ChavePIX { get; set; }
+
+        /// <summary>Identificador da transação Bolepix (26 a 35 caracteres).</summary>
+        public string TxId { get; set; }
+
+        #endregion
+
+        #region ::. Controle da chamada .::
+
+        /// <summary>Emite no ambiente de testes do banco (<c>TESTE</c>) em vez de produção.</summary>
+        public bool AmbienteTeste { get; set; }
+
+        /// <summary>
+        /// NSU da chamada (até 20 caracteres alfanuméricos, exclusivo por dia). Quando vazio, é
+        /// gerado na emissão e gravado aqui junto com <see cref="DataNsu"/> — assim um retry da
+        /// mesma emissão reaproveita o mesmo NSU, sem duplicar o boleto.
+        /// </summary>
+        public string NsuCode { get; set; }
+
+        public DateTime? DataNsu { get; set; }
+
+        #endregion
+
+        #region ::. Resultado da emissão .::
+
+        public string CodigoBarras { get; set; }
+
+        public string LinhaDigitavel { get; set; }
+
+        /// <summary>Data de entrada (registro) informada pelo banco.</summary>
+        public DateTime? DataEntrada { get; set; }
+
+        /// <summary>Payload Pix Copia e Cola do boleto.</summary>
+        public string QrCodePix { get; set; }
+
+        public string UrlQrCodePix { get; set; }
+
+        #endregion
+    }
+
+    /// <summary>
+    /// Retorno de cobrança (consulta de boletos já emitidos), só via API bancária (Santander). Todo
+    /// retorno vem neste mesmo formato; <see cref="TipoRetorno"/> diz o que ele representa e quais
+    /// campos estão preenchidos (hoje só <see cref="TipoRetornoCobrancaEnum.Liquidacao"/>).
+    /// No <see cref="Movimento"/>: <see cref="Movimento.Favorecido"/> é o pagador,
+    /// <see cref="Movimento.NumeroDocumentoNoBanco"/> é o nosso número,
+    /// <see cref="Movimento.NumeroDocumento"/> é o seu número, <see cref="Movimento.ValorPagamento"/>
+    /// é o valor pago e <see cref="Movimento.DataPagamento"/> a data do pagamento (valor nominal em
+    /// <see cref="ValorNominal"/>). <see cref="Movimento.SituacaoBancoBr"/> é
+    /// <see cref="BancoBrSituacaoEnum.Efetivado"/> para boleto liquidado.
+    /// </summary>
+    public class MovimentoItemRetornoCobranca : MovimentoItem
+    {
+        public TipoRetornoCobrancaEnum TipoRetorno { get; set; }
+
+        #region ::. Identificação do boleto .::
+
+        public string Convenio { get; set; }
+
+        public string NossoNumero { get; set; }
+
+        /// <summary>NSU da emissão e sua data — junto com o nosso número, identificam o boleto no banco.</summary>
+        public string NsuCode { get; set; }
+
+        public DateTime? DataNsu { get; set; }
+
+        /// <summary>Status do boleto como o banco informa (ex.: LIQUIDADO) e seu complemento (ex.: Baixa Operacional).</summary>
+        public string StatusBanco { get; set; }
+
+        public string ComplementoStatusBanco { get; set; }
+
+        public decimal? ValorNominal { get; set; }
+
+        public DateTime? DataVencimento { get; set; }
+
+        public DateTime? DataEmissao { get; set; }
+
+        /// <summary>Data de entrada (registro) informada pelo banco.</summary>
+        public DateTime? DataEntrada { get; set; }
+
+        public string CodigoBarras { get; set; }
+
+        public string LinhaDigitavel { get; set; }
+
+        /// <summary>Beneficiário final, quando informado na emissão.</summary>
+        public Pessoa BeneficiarioFinal { get; set; }
+
+        #endregion
+
+        #region ::. Liquidação .::
+
+        public decimal? ValorJuros { get; set; }
+
+        public decimal? ValorMulta { get; set; }
+
+        public decimal? ValorAbatimento { get; set; }
+
+        /// <summary>Valor de descontos concedidos no pagamento.</summary>
+        public decimal? ValorDesconto { get; set; }
+
+        public decimal? ValorIOF { get; set; }
+
+        /// <summary>Tipo do pagamento (ex.: PIX).</summary>
+        public string TipoPagamento { get; set; }
+
+        /// <summary>Banco onde foi pago (código, como o banco informa).</summary>
+        public string BancoPagamento { get; set; }
+
+        /// <summary>Canal do pagamento (ex.: INTERNET BANKING).</summary>
+        public string CanalPagamento { get; set; }
+
+        /// <summary>Espécie do pagamento (ex.: DEBITO EM CONTA).</summary>
+        public string EspeciePagamento { get; set; }
+
+        /// <summary>Identificador da transação Pix (Bolepix), quando pago por Pix.</summary>
+        public string TxId { get; set; }
+
+        #endregion
+    }
+
+    public class DescontoBoleto
+    {
+        public decimal Valor { get; set; }
+
+        public DateTime DataLimite { get; set; }
+    }
+
+    public class PartilhaBoleto
+    {
+        /// <summary>Código de partilha (2 dígitos).</summary>
+        public string Codigo { get; set; }
+
+        public decimal Valor { get; set; }
+    }
+
     public class MovimentoItemDDA : MovimentoItem
     {
         public string DescricaoTipoPagador { get; set; }
